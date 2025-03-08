@@ -1,0 +1,2445 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+
+#Install packages
+```{r}
+# CRAN
+
+install.packages("vegan")
+install.packages("Polychrome")
+install.packages("dendextend") 
+install.packages("ggplotify")
+install.packages("parallelMap")
+install.packages("caret")
+install.packages("randomForest")
+install.packages("multtest")
+install.packages(c("devtools", "RcppEigen", "RcppParallel", "Rtsne", "ggforce", "units"))
+install.packages("some_dependency")
+install.packages("decontam")
+install.packages("VennDiagram")
+install.packages("UpSetR")
+install.packages("DT")
+install.packages("openxlsx")
+devtools::install_github("gmteunisse/fantaxtic")
+devtools::install_github('schuyler-smith/phylosmith')
+
+
+
+# Bioconductor
+
+install.packages("BiocManager")
+BiocManager::install("phyloseq")
+BiocManager::install("ANCOMBC")
+BiocManager::install("mixOmics")
+BiocManager::install("microbiome")
+BiocManager::install("microbiomeMarker")
+
+```
+## Time stamp & initial clean-up
+
+```{r}
+date()
+rm(list=ls())
+graphics.off()
+```
+## Loading selected packages
+
+These are the generic packages used in may sections of the code.  The remaining packages will be loaded when needed.  
+
+```{r}
+
+library(dplyr)
+library(ggplot2)
+library(utils)
+library(ggfortify)
+library(vegan)
+library(DT)
+library(phyloseq)
+library(UpSetR)
+library(fantaxtic)
+library(tidyverse)
+library(magrittr)
+library(ggnested)
+library(knitr)
+library(gridExtra)
+library(openxlsx)
+```
+#Loading phyloseq by construction using Simran pipeline
+```{r}
+data.phy<- readRDS("ps.rds") #raw counts
+data.phy
+
+```
+#Read counts per treatment
+```{r}
+
+set.seed(123)
+
+#Keep only samples with TP 1, 2, 3
+table(sample_data(data.phy)$Timepoint)
+
+data.TP.phy<- subset_samples(data.phy, Timepoint %in% c("1","2","3"))
+data.TP.phy
+
+#Extract the count data and metadata
+otu_table<- otu_table(data.TP.phy)
+sample_data<- sample_data(data.TP.phy)
+
+#Convert OTU table to data frame
+otu_df<- as.data.frame((otu_table))
+
+#Add the sample metadat
+otu_df<- cbind(otu_df, sample_data(data.TP.phy))
+
+#total counts per sample
+otu_df$total_counts <- rowSums(otu_df[, 1:ncol(otu_table)])
+
+# Group by feed treatment and calculate median total_counts
+median_total_counts <- aggregate(total_counts ~ Feed, data = otu_df, FUN = median)
+
+# View the results
+print(median_total_counts)
+
+# Save the data frame as a CSV file
+write.csv(median_total_counts, file = "median_total_counts_per_feed.csv", row.names = FALSE)
+
+
+#Levels
+otu_df$Feed<-  factor(otu_df$Feed, levels = c("SIL", "BG", "TN"))
+
+#Plot
+ggplot(otu_df, aes(x = Feed, y = total_counts)) + 
+  geom_boxplot(fill=c("blue", "darkgreen", "grey")) +
+  labs(title = "",
+       x = "Feed Treatment",
+       y = "Total Counts") +
+  theme_classic()+
+  theme(
+    panel.border = element_rect(color = "black", fill = NA, size = 1))
+ggsave("Classified_ASV_counts_feed.png", dpi = 600)
+
+
+
+#remove
+rm(otu_df, otu_table, sample_data, data.TP.phy, median_total_counts)
+
+```
+#Exploring the Phyloseq object
+#Summary of Phyloseq object
+```{r}
+# Load phyloseq and check its version
+library(phyloseq) 
+
+# High-level content of the Phyloseq object
+data.phy 
+
+
+dim(sample_data(data.phy)) 
+sample_variables(data.phy)
+head(sample_names(data.phy))
+sample_data(data.phy)[1:5,1:5]
+
+# How many Animal per Feed and Timepoint? 
+table(sample_data(data.phy)[,c("Feed","Timepoint")])
+```
+#Explore Feature Table
+```{r}
+dim(otu_table(data.phy))
+
+
+otu_table(data.phy)[1:10,1:20]
+
+#Extract to matrix, and check sparsity
+otu_table.mx <- as.matrix(otu_table(data.phy)) 
+sum(otu_table.mx==0)/(nrow(otu_table.mx)*ncol(otu_table.mx)) # sparsity: 28%
+
+#Cleanup
+rm(otu_table.mx)
+```
+#Explore Taxonomy
+```{r}
+data_fil.phy<- subset_samples(data.phy, Timepoint %in% c("1","2","3"))
+data_fil.phy # phyloseq of 476 taxa at the three timepoints with all taxonomic ranks
+
+
+rank_names(data_fil.phy)
+
+#Taxonomy Table
+dim(tax_table(data_fil.phy))
+
+tax_table(data_fil.phy)[1:16,]
+
+#Extract to data frame
+taxa.df<- as.data.frame(tax_table(data_fil.phy))
+
+#What Kingdoms we have in the dataset 
+table(taxa.df$Domain)
+
+#Number of distinct Phyla in the dataset (dplyr)
+n_distinct(taxa.df$Phylum)
+
+#Number of distinct Families in the dataset
+n_distinct(taxa.df$Family)
+
+#Number of classified Genus
+table(taxa.df$Genus)
+n_distinct(taxa.df$Genus)
+
+110-22
+(88/110)*100
+
+#Number of classified Species
+table(taxa.df$Species)
+n_distinct(taxa.df$Species)
+
+
+#7 most abundant Bacterial Phyla
+taxa.df %>% filter(Domain == "Bacteria") %>% 
+  count(Phylum, sort=T) %>% 
+  head(7)
+
+#Clean-up
+rm(taxa.df, distinct_asv_counts, distinct_asv_counts_species)
+```
+#Manipulating Phyloseq Object
+```{r}
+data_fil.phy
+
+#Keep only samples with TP 1, 2, 3
+table(sample_data(data_fil.phy)$Timepoint)
+
+treatment.phy<- subset_samples(data_fil.phy, Timepoint %in% c("1","2","3"))
+treatment.phy
+
+#What Domain do we have in the data
+table(as.data.frame(tax_table(data_fil.phy))$Domain)
+
+#Agglomerate Domain to Genus level: to reduce size of data file for analysis
+GenusTreatment.phy<- tax_glom(treatment.phy, taxrank = "Genus")
+GenusTreatment.phy
+#Agglomerate Domain to Phyla level: to reduce size of data file for analysis
+PhylaTreatment.phy<- tax_glom(treatment.phy, taxrank = "Phylum")
+#Agglomerate Domain to Family level: to reduce size of data file for analysis
+FamilyTreatment.phy<- tax_glom(treatment.phy, taxrank = "Family")
+
+rank_names(GenusTreatment.phy)
+
+head(tax_table(GenusTreatment.phy))
+
+#Explore sparisty agglomeration
+otu_table.mx<- as.matrix(otu_table(GenusTreatment.phy))
+sum(otu_table.mx==0)/(nrow(otu_table.mx)*ncol(otu_table.mx))
+
+#Cleanup
+rm(otu_table.mx)
+```
+#Normalisation using total sum scaling of treatment.phy: Decostand package
+```{r}
+#Treatment.phy Raw
+treatment.phy
+
+#Normalise Treatment.phy
+treatmentnorm.phy<- treatment.phy
+
+#Plots of counts before Normalisation
+countsPerSample<- colSums(otu_table(treatmentnorm.phy))
+plot(colSums(otu_table(treatmentnorm.phy)), 
+     ylab="Count", xlab="Samples", xaxt="n", 
+     main="Counts per sample before normalization")
+
+# Extract the abundance data (OTU table) from the phyloseq object
+otu_table<- otu_table(treatmentnorm.phy)
+
+# Convert the OTU table to a matrix if it's not already
+otu_matrix <- as(otu_table, "matrix")
+
+# Apply TSS normalization using the decostand function
+otu_matrix_normalized <- decostand(otu_matrix, method = "total")
+
+# Ensure taxa names are preserved
+taxa_names <- taxa_names(treatmentnorm.phy)
+
+# Create a new OTU table with the normalized data
+otu_table_normalized <- otu_table(otu_matrix_normalized, taxa_are_rows = taxa_are_rows(otu_table))
+
+# Check if the number of taxa matches
+if (!all(taxa_names(otu_table_normalized) == taxa_names)) {
+  stop("Taxa names do not match after normalization.")
+}
+
+# Assign the correct taxa names
+taxa_names(otu_table_normalized) <- taxa_names
+
+# Replace the original OTU table with the normalized data in the phyloseq object
+otu_table(treatmentnorm.phy) <- otu_table_normalized
+
+#Plot after normalisation - should be all equal to one
+plot(colSums(otu_table(treatmentnorm.phy)), 
+     ylab="Count", xlab="Samples", xaxt="n", 
+     main="Counts per sample after normalization",
+     ylim=c(min(countsPerSample),max(countsPerSample)))
+
+#Normalised Treatmentnorm.phy
+treatmentnorm.phy
+
+rm(countsPerSample, otu_table, otu_matrix, otu_matrix_normalized, taxa_names, otu_table_normalized)
+```
+#Normalisation using total sum scaling: Decostand package
+```{r}
+library(microbiome)
+library(vegan)
+
+#Plots of counts before Normalisation
+countsPerSample<- colSums(otu_table(GenusTreatment.phy))
+plot(colSums(otu_table(GenusTreatment.phy)), 
+     ylab="Count", xlab="Samples", xaxt="n", 
+     main="Counts per sample before normalization")
+
+# Extract the abundance data (OTU table) from the phyloseq object
+otu_table<- otu_table(GenusTreatment.phy)
+
+# Convert the OTU table to a matrix if it's not already
+otu_matrix <- as(otu_table, "matrix")
+
+# Apply TSS normalization using the decostand function
+otu_matrix_normalized <- decostand(otu_matrix, method = "total")
+
+# Ensure taxa names are preserved
+taxa_names <- taxa_names(GenusTreatment.phy)
+
+# Create a new OTU table with the normalized data
+otu_table_normalized <- otu_table(otu_matrix_normalized, taxa_are_rows = taxa_are_rows(otu_table))
+
+# Check if the number of taxa matches
+if (!all(taxa_names(otu_table_normalized) == taxa_names)) {
+  stop("Taxa names do not match after normalization.")
+}
+
+# Assign the correct taxa names
+taxa_names(otu_table_normalized) <- taxa_names
+
+# Replace the original OTU table with the normalized data in the phyloseq object
+otu_table(GenusTreatment.phy) <- otu_table_normalized
+
+#Plot after normalisation - should be all equal to one
+plot(colSums(otu_table(GenusTreatment.phy)), 
+     ylab="Count", xlab="Samples", xaxt="n", 
+     main="Counts per sample after normalization",
+     ylim=c(min(countsPerSample),max(countsPerSample)))
+
+rm(countsPerSample, otu_table, otu_matrix, otu_matrix_normalized, taxa_names, otu_table_normalized)
+```
+#Normalisation of PHYLA
+```{r}
+#PhylaTreatment.phy Raw
+PhylaTreatment.phy
+
+#Normalise Treatment.phy
+phylatreatmentnorm.phy<- PhylaTreatment.phy
+
+#Plots of counts before Normalisation
+countsPerSample<- colSums(otu_table(phylatreatmentnorm.phy))
+plot(colSums(otu_table(phylatreatmentnorm.phy)), 
+     ylab="Count", xlab="Samples", xaxt="n", 
+     main="Counts per sample before normalization")
+
+# Extract the abundance data (OTU table) from the phyloseq object
+otu_table<- otu_table(phylatreatmentnorm.phy)
+
+# Convert the OTU table to a matrix if it's not already
+otu_matrix <- as(otu_table, "matrix")
+
+# Apply TSS normalization using the decostand function
+otu_matrix_normalized <- decostand(otu_matrix, method = "total")
+
+# Ensure taxa names are preserved
+taxa_names <- taxa_names(phylatreatmentnorm.phy)
+
+# Create a new OTU table with the normalized data
+otu_table_normalized <- otu_table(otu_matrix_normalized, taxa_are_rows = taxa_are_rows(otu_table))
+
+# Check if the number of taxa matches
+if (!all(taxa_names(otu_table_normalized) == taxa_names)) {
+  stop("Taxa names do not match after normalization.")
+}
+
+# Assign the correct taxa names
+taxa_names(otu_table_normalized) <- taxa_names
+
+# Replace the original OTU table with the normalized data in the phyloseq object
+otu_table(phylatreatmentnorm.phy) <- otu_table_normalized
+
+#Plot after normalisation - should be all equal to one
+plot(colSums(otu_table(phylatreatmentnorm.phy)), 
+     ylab="Count", xlab="Samples", xaxt="n", 
+     main="Counts per sample after normalization",
+     ylim=c(min(countsPerSample),max(countsPerSample)))
+
+#Normalised Treatmentnorm.phy
+phylatreatmentnorm.phy
+
+rm(countsPerSample, otu_table, otu_matrix, otu_matrix_normalized, taxa_names, otu_table_normalized)
+```
+#Normalisation of FAMILY
+```{r}
+#FamilyTreatment.phy Raw
+FamilyTreatment.phy
+
+#Normalise Treatment.phy
+familytreatmentnorm.phy<- FamilyTreatment.phy
+
+#Plots of counts before Normalisation
+countsPerSample<- colSums(otu_table(familytreatmentnorm.phy))
+plot(colSums(otu_table(familytreatmentnorm.phy)), 
+     ylab="Count", xlab="Samples", xaxt="n", 
+     main="Counts per sample before normalization")
+
+# Extract the abundance data (OTU table) from the phyloseq object
+otu_table<- otu_table(familytreatmentnorm.phy)
+
+# Convert the OTU table to a matrix if it's not already
+otu_matrix <- as(otu_table, "matrix")
+
+# Apply TSS normalization using the decostand function
+otu_matrix_normalized <- decostand(otu_matrix, method = "total")
+
+# Ensure taxa names are preserved
+taxa_names <- taxa_names(familytreatmentnorm.phy)
+
+# Create a new OTU table with the normalized data
+otu_table_normalized <- otu_table(otu_matrix_normalized, taxa_are_rows = taxa_are_rows(otu_table))
+
+# Check if the number of taxa matches
+if (!all(taxa_names(otu_table_normalized) == taxa_names)) {
+  stop("Taxa names do not match after normalization.")
+}
+
+# Assign the correct taxa names
+taxa_names(otu_table_normalized) <- taxa_names
+
+# Replace the original OTU table with the normalized data in the phyloseq object
+otu_table(familytreatmentnorm.phy) <- otu_table_normalized
+
+#Plot after normalisation - should be all equal to one
+plot(colSums(otu_table(familytreatmentnorm.phy)), 
+     ylab="Count", xlab="Samples", xaxt="n", 
+     main="Counts per sample after normalization",
+     ylim=c(min(countsPerSample),max(countsPerSample)))
+
+#Normalised Treatmentnorm.phy
+familytreatmentnorm.phy
+
+rm(countsPerSample, otu_table, otu_matrix, otu_matrix_normalized, taxa_names, otu_table_normalized)
+
+```
+#ANOVA of Phyla normalised read counts
+```{r}
+phylatreatmentnorm.phy
+
+# Convert to long data frame
+smelt<- psmelt(phylatreatmentnorm.phy)
+
+# Multiply the Abundance column by 100
+smelt$Abundance <- smelt$Abundance * 100
+
+# Calculate average abundance by Phylum, Treatment, Period, and Interaction
+average_feed <- smelt %>%
+  group_by(Phylum, Feed) %>%
+  summarise(Average_Abundance = mean(Abundance, na.rm = TRUE)) %>%
+  ungroup()
+write.xlsx(average_feed, file = "phylarelabund_feed.xlsx", rowNames= FALSE)
+
+average_period <- smelt %>%
+  group_by(Phylum, Timepoint) %>%
+  summarise(Average_Abundance = mean(Abundance, na.rm = TRUE)) %>%
+  ungroup()
+write.xlsx(average_period, file = "phylarelabund_period.xlsx", rowNames= FALSE)
+
+average_tp <- smelt %>%
+  group_by(Phylum, TP) %>%
+  summarise(Average_Abundance = mean(Abundance, na.rm = TRUE)) %>%
+  ungroup()
+write.xlsx(average_tp, file = "phylarelabund_tp.xlsx", rowNames= FALSE)
+
+# Calculate the standard error for each Abundance
+se_treat <- smelt %>%
+  group_by(Phylum) %>%
+  summarise(
+    Count = n(),
+    StandardError = sd(Abundance, na.rm = TRUE) / sqrt(n())
+  ) %>%
+  ungroup()
+write.table(se_treat, file = "se_treat.txt")
+
+
+#Shapiro and Levene of Phylum
+library(purrr)
+
+# Perform Shapiro-Wilk test for each Phylum
+shapiro_results <- smelt %>%
+  group_by(Phylum) %>%
+  summarise(
+    W_statistic = tryCatch(shapiro.test(Abundance)$statistic, error = function(e) NA),
+    p_value = tryCatch(shapiro.test(Abundance)$p.value, error = function(e) NA)
+  ) %>%
+  ungroup()
+
+write.table(shapiro_results, file = "shapiro_results.txt")
+
+# Perform Levene's test for each Phylum
+levene_results <- smelt %>%
+  group_by(Phylum) %>%
+  summarise(
+    Test_Statistic = tryCatch(leveneTest(Abundance ~ Feed)$`F value`[1], error = function(e) NA),
+    p_value = tryCatch(leveneTest(Abundance ~ Feed)$`Pr(>F)`[1], error = function(e) NA)
+  ) %>%
+  ungroup()
+
+write.table(levene_results, file = "levene_results.txt")
+
+# Filter metabolites with p-value < 0.05
+significant_phyla <- shapiro_results %>%
+  filter(p_value < 0.05) %>%
+  pull(Phylum)  # Extract the list of significant Phylum
+
+#Perform Kruskal-Wallis test for each significant metabolite
+kruskal_results <- smelt %>%
+  filter(Phylum %in% significant_phyla) %>%
+  group_by(Phylum) %>%
+  summarise(
+    KW_treatment = tryCatch(kruskal.test(Abundance ~ Feed)$p.value, error = function(e) NA),
+    KW_period = tryCatch(kruskal.test(Abundance ~ Timepoint)$p.value, error = function(e) NA),
+    KW_TP = tryCatch(kruskal.test(Abundance ~ TP)$p.value, error = function(e) NA)
+  ) %>%
+  ungroup()
+write.table(kruskal_results, file = "kruskal_results.txt")
+
+#Manual Anova
+b<- filter(smelt, Phylum == "Bacteroidota")
+bac<- aov(Abundance ~ Feed*Timepoint, data = b)
+summary(bac)
+rm(bac, b)
+
+f<- filter(smelt, Phylum == "Firmicutes_A")
+fir<- aov(Abundance ~ Feed*Timepoint, data = f)
+summary(fir)
+rm(fir, f)
+
+fc<- filter(smelt, Phylum == "Firmicutes_C")
+firc<- aov(Abundance ~ Feed*Timepoint, data = fc)
+summary(firc)
+rm(fc, firc)
+
+m<- filter(smelt, Phylum == "Methanobacteriota_A_1229")
+met<- aov(Abundance ~ Feed*Timepoint, data = m)
+summary(met)
+rm(m, met)
+
+p<-filter(smelt, Phylum == "Actinobacteriota")
+pat<- aov(Abundance ~ Feed*Timepoint, data = p)
+summary(pat)
+pairwise.t.test(p$Abundance, p$Feed, p.adjust.method = "BH")
+rm(p, pat)
+
+#Combining Firmicutes A, B, C, D
+
+# Filter rows for the specified Phyla
+firmicutes_subset <- filter(smelt, Phylum %in% c("Firmicutes_A", "Firmicutes_B_370539", "Firmicutes_C", "Firmicutes_D"))
+
+# Sum the Abundance for these specific Phyla
+combined_abundance <- firmicutes_subset %>%
+  group_by(Sample, Animal, Feed, Timepoint, TP) %>%  # Group by sample if you want to sum for each sample separately
+  summarise(Total_Abundance = sum(Abundance, na.rm = TRUE))
+
+# Create a new data frame with Phylum labeled as 'Firmicutes'
+combined_abundance <- combined_abundance %>%
+  mutate(Phylum = "Firmicutes")
+
+# Rename the 'Total_Abundance' column to 'Abundance'
+combined_abundance <- rename(combined_abundance, Abundance = Total_Abundance)
+
+# Select only the columns that match the original smelt data frame (Sample, Phylum, Abundance)
+#combined_abundance <- combined_abundance %>%
+#  select(Sample, Phylum, Abundance)
+
+# Remove rows from smelt where Phylum is one of the specified Firmicutes
+smelt_filtered <- smelt %>%
+  filter(!Phylum %in% c("Firmicutes_A", "Firmicutes_B_370539", "Firmicutes_C", "Firmicutes_D"))
+
+# Now combine the new combined_abundance data with the filtered smelt data
+smelt_recombined <- bind_rows(smelt_filtered, combined_abundance)
+
+#Now Select for Bacteroidota and Firmicutes
+fb<- smelt_recombined %>%
+  filter(Phylum %in% c("Firmicutes","Bacteroidota")) 
+write.xlsx(fb, file = "fb_ratio.xlsx", rowNames= FALSE)
+
+#Upload FB xlsx
+library(readxl)
+ratio <- read_excel("fb.xlsx")
+View(ratio)
+
+# Reorder Feed levels in the ratio data frame
+ratio$Feed <- factor(ratio$Feed, levels = c("SIL", "BG", "TN"))
+
+#Plot
+c<-ggplot(ratio, aes(x = Feed, y = fb)) + 
+  geom_boxplot(fill=c("blue", "darkgreen", "grey")) +
+  labs(title = "",
+       x = "Feed Treatment",
+       y = "Ratio", tag = "(c)") +
+  theme_classic()+
+  theme(panel.border = element_rect(color = "black", fill = NA, size = 1))
+ggsave("FB_Ratio.png", dpi = 600)
+c
+
+#Stats
+tapply(ratio$fb, INDEX = ratio$Feed, FUN = mean, 
+       na.rm = TRUE)
+tapply(ratio$fb, INDEX = ratio$Timepoint, FUN = mean, 
+       na.rm = TRUE)
+tapply(ratio$fb, INDEX = ratio$TP, FUN = mean, 
+       na.rm = TRUE)
+std.error(ratio$fb, na.rm = TRUE)
+sd<- sd(ratio$fb)
+n<- length(ratio$fb)
+sem<- sd/sqrt(n)
+
+shapiro.test(ratio$fb)
+leveneTest(fb~Feed, data = ratio)
+kruskal.test(fb~Feed, data = ratio )
+kruskal.test(fb~Timepoint, data = ratio )
+kruskal.test(fb~TP, data = ratio )
+
+
+rm(phylatreatmentnorm.phy,smelt, average_feed, average_period, average_tp,
+   se_treat, shapiro_results, levene_results, significant_phyla, kruskal_results,
+   firmicutes_subset, combined_abundance, smelt_filtered, smelt_recombined,
+   fb,n, sd, sem)
+
+```
+#Taxonomic Composition of Genus 95% abundance per sample
+```{r}
+#Reordering Feed levels of the GenusTreatment.phy
+# Explicitly set the levels
+levels(sample_data(GenusTreatment.phy)$Feed) <- c("SIL", "BG", "TN")
+
+#Merge phyloseq by feed treatment
+treatmentgenus<- merge_samples(GenusTreatment.phy, "Feed")
+#Check sample metadata
+sample_metadata <- sample_data(treatmentgenus)
+
+# Print the sample metadata
+View(sample_metadata)
+
+# Sum relative abundances across all samples
+genus_abundance <- taxa_sums(treatmentgenus)
+
+# Sort genera by abundance and calculate cumulative sum
+genus_abundance_sorted <- sort(genus_abundance, decreasing = TRUE)
+cumulative_abundance <- cumsum(genus_abundance_sorted)
+total_abundance <- sum(genus_abundance_sorted)
+
+# Identify genera that contribute to the top 95%
+top_95_genera <- names(genus_abundance_sorted[cumulative_abundance / total_abundance <= 0.95])
+
+# Genera that are in the bottom 5%
+bottom_5_genera <- names(genus_abundance_sorted[cumulative_abundance / total_abundance > 0.95])
+# Reassign bottom 5% genera to "<5%"
+tax_table(treatmentgenus)[bottom_5_genera, "Genus"] <- "<5%"
+
+# Subset the phyloseq object to include only the top 95% abundant genera
+Genus_top95 <- prune_taxa(c(top_95_genera,bottom_5_genera), treatmentgenus)
+relative_abunadance <- transform_sample_counts(Genus_top95, function(OTU) OTU/sum(OTU))
+sample_data1<- sample_data(relative_abunadance)
+
+g<-plot_bar(relative_abunadance, fill = "Genus") +
+  geom_bar(aes(color = Genus, fill = Genus), stat = "identity", position = "stack") +
+  theme(legend.position = "bottom") + 
+  ggtitle("Taxonomy (Genus) per sample") +
+  guides(fill = guide_legend(ncol = 3))
+g
+ggsave("Genus_95_Abundance.png", plot = g, width = , height = 15)
+
+#Leveling Abundance in order of Abundance
+# Convert to data frame
+df <- psmelt(relative_abunadance)
+# Calculate total abundance per genus
+total_abundance_per_genus <- aggregate(Abundance ~ Genus, data = df, sum)
+# Reorder the Genus factor levels based on total abundance
+df$Genus <- factor(df$Genus, levels = total_abundance_per_genus$Genus[order(total_abundance_per_genus$Abundance)])
+
+
+Z<- ggplot(df, aes(x = Feed, y = Abundance, fill = Genus))+
+  geom_col(color = "black")+ scale_fill_viridis_d(option = "viridis", direction = 
+            1, begin = 0, end = 1, n = 62)+
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +            theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)) +            labs(x = "Feed type", y = "Abundance")+
+   theme(legend.position = "bottom") + 
+  ggtitle("Taxonomy (Genus) per sample") +
+  guides(fill = guide_legend(ncol = 3))
+Z
+ggsave("Genus_95_Abundance_2.png", plot = Z, width = , height = 15)
+
+rm(treatmentgenus, sample_metadata, genus_abundance, genus_abundance_sorted, cumulative_abundance,total_abundance, top_95_genera, bottom_5_genera, Genus_top95, 
+relative_abunadance, g, sample_data1, df, total_abundance_per_genus,Z,)
+```
+#Taxonomic Composition: Combining low abundant taxa
+```{r}
+#Convert phyloseq to a large data frame
+smelt<- psmelt(GenusTreatment.phy)
+
+#Get counts per Genus
+genus.df<- smelt %>% 
+  group_by(Genus) %>%
+  summarise(Count = sum(Abundance))
+
+#Select the cut off (e.g 1% of total count)
+cutoff<- 0.01 * sum(smelt$Abundance)
+
+#Select low abundant Genus (with total counts below the cutoff)
+lowAbundant<- genus.df[genus.df$Count <= cutoff,]$Genus
+
+#Substitute Genus names to "<1%" for the low abundant Genus
+smelt[smelt$Genus %in% lowAbundant, ]$Genus<- '<1%'
+
+#Make Stacked barplot
+g1<- ggplot(smelt, aes(x= Sample, y=Abundance, fill= Genus))+
+  geom_bar(aes(), stat = "identity", position = "stack")+
+  theme(legend.position = "bottom")+
+  ggtitle("Taxonomy (Genus) per sample")+
+  guides(fill= guide_legend(nrow = 3))+
+  theme(axis.text.x = element_text(angle = 90))+
+  labs(y="Relative abundance", x = NULL)+
+  theme(legend.position = "bottom")+
+  guides(fill= guide_legend(ncol = 3))
+g1
+
+rm(smelt, genus.df, cutoff, lowAbundant, g1)
+```
+#Taxonomic Composition:Taxa by Treatment
+```{r}
+treatmentgenus<- merge_samples(GenusTreatment.phy, "Feed")
+treatmentgenus
+
+#Re-normalise
+treatmentgenus<- transform_sample_counts(treatmentgenus, function(x) x/ sum(x))
+
+#Plot
+g2<-plot_bar(treatmentgenus, fill = "Genus")+
+  geom_bar(aes(color=Genus, fill= Genus), stat = "identity", position = "stack")+
+  theme(legend.position = "bottom")+
+  ggtitle("Taxonomy (Genus) per treatment")+
+  guides(fill=guide_legend(ncol = 3))
+g2
+
+ggsave("Genus_Treatment.png", plot = g2, width = , height = 15)
+
+rm(treatmentgenus, g2)
+```
+#Taxonomic composition: Treatment and low abundant 
+```{r}
+treatmentgenus<- merge_samples(GenusTreatment.phy, "Feed")
+treatmentgenus
+
+#Re-normalise
+treatmentgenus<- transform_sample_counts(treatmentgenus, function(x) x/ sum(x) *100)
+
+#Convert phyloseq to a large data frame
+smelt1<- psmelt(treatmentgenus)
+
+#Get counts per Genus
+genustreat.df<- smelt1 %>% 
+  group_by(Genus) %>%
+  summarise(Count = sum(Abundance))
+
+#Select the cut off (e.g 1% of total count)
+cutoff<- 0.01 * sum(smelt1$Abundance)
+
+#Select low abundant Genus (with total counts below the cutoff)
+lowAbundant<- genustreat.df[genustreat.df$Count <= cutoff,]$Genus
+
+#Substitute Genus names to "<1%" for the low abundant Genus
+smelt1[smelt1$Genus %in% lowAbundant, ]$Genus<- '<1%'
+
+
+
+#Make Stacked barplot
+g2<- ggplot(smelt1, aes(x= Sample, y=Abundance, fill= Genus))+
+  geom_bar(aes(), stat = "identity", position = "stack")+theme(legend.position = "bottom")+
+  ggtitle("Taxonomy (Genus) per sample")+
+  guides(fill= guide_legend(nrow = 3))+
+  theme(axis.text.x = element_text(angle = 90))+
+  labs(y="Relative abundance (%)", x = NULL)+
+  theme(legend.position = "bottom")+
+  guides(fill= guide_legend(ncol = 3))
+g2
+
+rm(smelt1, treatmentgenus, genustreat.df, cutoff,low_Abundant, g2)
+```
+##Taxonomic composition: Treatment and low abundant ordered by level of Abundance
+```{r}
+
+treatmentgenus<- GenusTreatment.phy
+treatmentgenus
+
+#Re-normalise
+treatmentgenus<- transform_sample_counts(treatmentgenus, function(x) x/ sum(x) *100)
+
+# Convert phyloseq to a large data frame
+smelt1 <- psmelt(treatmentgenus)
+
+# Get counts per Genus
+genustreat.df <- smelt1 %>% 
+  group_by(Genus) %>%
+  summarise(Count = sum(Abundance), .groups = 'drop')
+
+# Select the cutoff (e.g., 1% of total count)
+cutoff <- 0.01 * sum(smelt1$Abundance)
+
+# Select low-abundant Genus (with total counts below the cutoff)
+lowAbundant <- genustreat.df %>% filter(Count <= cutoff) %>% pull(Genus)
+
+# Substitute Genus names to "<1%" for the low-abundant Genus
+smelt1 <- smelt1 %>%
+  mutate(Genus = ifelse(Genus %in% lowAbundant, '<1%', Genus))
+
+# Calculate total abundance per Genus for ordering
+genus_order <- genustreat.df %>%
+  mutate(Genus = ifelse(Genus %in% lowAbundant, '<1%', Genus)) %>%
+  group_by(Genus) %>%
+  summarise(TotalCount = sum(Count), .groups = 'drop') %>%
+  arrange(TotalCount) %>%
+  pull(Genus)
+
+#Ensure unique levels and set the factor
+all_levels <- unique(c('<1%', genus_order))
+
+# Reorder Feed factor levels
+smelt1 <- smelt1 %>%
+  mutate(Feed = factor(Feed, levels = c("SIL", "BG", "TN")))
+
+# Make the Genus factor ordered by TotalCount, with '<1%' at the top
+smelt1 <- smelt1 %>%
+  mutate(Genus = factor(Genus, levels = all_levels))
+
+### Step 2: Create the Bar Plot
+
+# Make stacked barplot
+g2 <- ggplot(smelt1, aes(x = Sample, y = Abundance, fill = Genus)) +
+  geom_bar(aes(fill = Genus, color = Genus),stat = "identity", position = "stack") + # Border color around bars +
+  facet_wrap(~Feed, scales= "free_x", nrow=1)+
+  labs(y = "Relative abundance (%)", x = NULL) +
+   guides(fill = guide_legend(ncol = 4)) +
+  theme(legend.position = "bottom", 
+        strip.background = element_blank(), 
+        axis.text.x.bottom = element_blank(),
+        axis.ticks.x.bottom = element_blank())+
+     scale_fill_manual(values = c("darkblue","darkgoldenrod1","darkseagreen",
+        "darkorchid","darkolivegreen","lightskyblue","darkgreen","deeppink",
+        "khaki2","firebrick","brown1","darkorange1","cyan1","royalblue4","darksalmon"  ,"dodgerblue3","steelblue", "darkolivegreen1","brown4","darkorange4","cyan4"))
+  
+
+# Display the plot
+g2
+ggsave("Genus_composition.png", plot = g2, width = 17, height = 20, units = "cm", dpi = 600)
+
+
+rm(treatmentgenus, smelt1, genus_order, all_levels, g2, lowAbundant, cutoff)
+```
+#Top 10 Taxa Genus stacked Bar plot
+```{r}
+treatmentgenus<- GenusTreatment.phy
+treatmentgenus
+
+#Re-normalise
+treatmentgenus<- transform_sample_counts(treatmentgenus, function(x) x/ sum(x) *100)
+
+# Convert phyloseq to a large data frame
+smelt1 <- psmelt(treatmentgenus)
+
+# Get counts per Genus
+genustreat.df <- smelt1 %>% 
+  group_by(Genus) %>%
+  summarise(Count = mean(Abundance), .groups = 'drop')
+
+# Select the top 10 genera based on total abundance
+top_10_genus <- genustreat.df %>%
+  arrange(desc(Count)) %>%
+  slice_head(n = 10) %>%
+  pull(Genus)
+
+# Add an "Other" category for genera outside the top 10
+smelt1 <- smelt1 %>%
+  mutate(Genus = ifelse(Genus %in% top_10_genus, Genus, "Other"))
+
+# Recalculate relative abundance to ensure it sums to 100% for each sample
+smelt1 <- smelt1 %>%
+  group_by(Sample, Genus) %>%
+  summarise(Abundance = sum(Abundance), .groups = 'drop') %>%
+  group_by(Sample) %>%
+  mutate(Abundance = Abundance / sum(Abundance) * 100)
+
+# Extract the sample metadata from the original phyloseq object
+sample_metadata <- as.data.frame(sample_data(treatmentgenus))
+
+# Ensure there is a "Sample" column to match on
+sample_metadata$Sample <- rownames(sample_metadata)
+
+# Join the metadata with smelt1 based on the Sample column
+smelt1 <- smelt1 %>%
+  left_join(sample_metadata, by = "Sample")
+
+# Calculate the mean abundance of each Genus
+genus_order <- smelt1 %>%
+  filter(Genus != "Other") %>%  # Exclude "Other" temporarily
+  group_by(Genus) %>%
+  summarise(mean_abundance = mean(Abundance), .groups = 'drop') %>%
+  arrange(mean_abundance) %>%
+  pull(Genus)
+
+# Add "Other" to the top of the list and set this as the Genus factor levels
+genus_order <- c("Other", genus_order)
+smelt1$Genus <- factor(smelt1$Genus, levels = genus_order)
+
+# Reorder Feed factor levels
+smelt1 <- smelt1 %>%
+  mutate(Feed = factor(Feed, levels = c("SIL", "BG", "TN")))
+
+# Plot the stacked barplot
+g2 <- ggplot(smelt1, aes(x = Sample, y = Abundance, fill = Genus)) +
+  geom_bar(aes(fill = Genus),stat = "identity", position = "stack") + 
+  facet_wrap(~Feed, scales= "free_x", nrow=1) +
+  labs(y = "Relative abundance (%)", x = "Rumen sample") +
+  guides(fill = guide_legend(ncol = 4)) +
+  theme(
+    legend.position = "bottom", 
+    strip.background = element_blank(), 
+    axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))+ # Rotate labels
+   scale_fill_manual(values = c("darkblue","darkgoldenrod1","darkseagreen",
+        "darkorchid","darkolivegreen","lightskyblue","darkgreen","deeppink",
+        "khaki2","firebrick","brown1"))
+  
+
+# Display the plot
+g2
+ggsave("Genus_composition_top_10.png", plot = g2, dpi = 600, width = 17, height = 20,
+       units = "cm")
+
+rm(treatmentgenus, genustreat.df, top_10_genus, sample_metadata, 
+   genus_order, g2)
+
+
+```
+#Genus average relative abundance per treatment (TOP TEN)
+```{r}
+#Using smelt1
+
+# Calculate average abundance by Genus, Treatment, Period, and Interaction
+average_feed <- smelt1 %>%
+  group_by(Genus, Feed) %>%
+  summarise(Average_Abundance = mean(Abundance, na.rm = TRUE)) %>%
+  ungroup()
+#Average feed wide
+average_feed_wide <- average_feed %>%
+  pivot_wider(
+    names_from = Feed,                # Create new columns from the 'Feed' values
+    values_from = Average_Abundance,  # Fill those columns with the 'Average_Abundance'
+    values_fill = 0 )
+
+# Calculate the standard error for each Abundance
+se_treat <- smelt1 %>%
+  group_by(Genus) %>%
+  summarise(
+    Count = n(),
+    StandardError = sd(Abundance, na.rm = TRUE) / sqrt(n())
+  ) %>%
+  ungroup()
+
+#Combine averages and S.E.M
+# Join the tables by Genus
+combined_table <- average_feed_wide %>%
+  left_join(se_treat, by = "Genus")  # Ensure the column name is consistent
+
+
+#Shapiro and Levene of Phylum
+library(purrr)
+
+# Perform Shapiro-Wilk test for each Phylum
+shapiro_results <- smelt1 %>%
+  group_by(Genus) %>%
+  summarise(
+    W_statistic = tryCatch(shapiro.test(Abundance)$statistic, error = function(e) NA),
+    p_value = tryCatch(shapiro.test(Abundance)$p.value, error = function(e) NA)
+  ) %>%
+  ungroup()
+
+# Perform Levene's test for each Phylum
+levene_results <- smelt1 %>%
+  group_by(Genus) %>%
+  summarise(
+    Test_Statistic = tryCatch(leveneTest(Abundance ~ Feed)$`F value`[1], error = function(e) NA),
+    p_value = tryCatch(leveneTest(Abundance ~ Feed)$`Pr(>F)`[1], error = function(e) NA)
+  ) %>%
+  ungroup()
+
+# Filter metabolites with p-value < 0.05
+significant_genus <- shapiro_results %>%
+  filter(p_value < 0.05) %>%
+  pull(Genus)  # Extract the list of significant Phylum
+
+#Perform Kruskal-Wallis test for each significant metabolite
+kruskal_results <- smelt1 %>%
+  filter(Genus %in% significant_genus) %>%
+  group_by(Genus) %>%
+  summarise(
+    KW_treatment = tryCatch(kruskal.test(Abundance ~ Feed)$p.value, error = function(e) NA),
+    KW_period = tryCatch(kruskal.test(Abundance ~ Timepoint)$p.value, error = function(e) NA),
+    KW_TP = tryCatch(kruskal.test(Abundance ~ TP)$p.value, error = function(e) NA)
+  ) %>%
+  ungroup()
+
+#Combine with Kruskal results
+combined_table <- combined_table %>%
+  left_join(kruskal_results, by = "Genus") 
+write.xlsx(combined_table, file = "Top10_Genus_relabund.xlsx")
+
+#Manual Anova
+b<- filter(smelt1, Genus == "Other")
+bac<- aov(Abundance ~ Feed*Timepoint, data = b)
+summary(bac)
+rm(bac, b)
+
+b<- filter(smelt1, Genus == "Cryptobacteroides")
+bac<- aov(Abundance ~ Feed*Timepoint, data = b)
+summary(bac)
+pairwise.t.test(b$Abundance, b$Feed, p.adjust.method = "BH")
+rm(bac, b)
+
+#Pairwise t-tests
+b<- filter(smelt1, Genus == "UBA3636")
+pairwise.t.test(b$Abundance, b$Feed, p.adjust.method = "BH")
+rm(b)
+
+b<- filter(smelt1, Genus == "Limimorpha")
+pairwise.t.test(b$Abundance, b$Feed, p.adjust.method = "BH")
+
+rm(smelt1, average_feed, average_feed_wide, se_treat, combined_table,
+   shapiro_results, levene_results, significant_genus, kruskal_results)
+```
+
+###Taxonomic composition: Treatment and low abundant PHYLA
+```{r}
+#phylatreatmentnorm
+
+#Re-normalise
+phylatreatmentnorm<- transform_sample_counts(phylatreatmentnorm.phy, function(x) x/ sum(x) *100)
+
+# Convert phyloseq to a large data frame
+smelt1 <- psmelt(phylatreatmentnorm)
+
+# Get counts per Phyla
+phyla.df <- smelt1 %>% 
+  group_by(Phylum) %>%
+  summarise(Count = sum(Abundance), .groups = 'drop')
+
+# Select the cutoff (e.g., 1% of total count)
+cutoff <- 0.01 * sum(smelt1$Abundance)
+
+# Select low-abundant Phyla (with total counts below the cutoff)
+lowAbundant <- phyla.df %>% filter(Count <= cutoff) %>% pull(Phylum)
+
+# Substitute Genus names to "<1%" for the low-abundant Phyla
+smelt1 <- smelt1 %>%
+  mutate(Phylum = ifelse(Phylum %in% lowAbundant, '<1%', Phylum))
+
+# Calculate total abundance per Phyla for ordering
+phyla_order <- phyla.df %>%
+  mutate(Phylum = ifelse(Phylum %in% lowAbundant, '<1%', Phylum)) %>%
+  group_by(Phylum) %>%
+  summarise(TotalCount = sum(Count), .groups = 'drop') %>%
+  arrange(TotalCount) %>%
+  pull(Phylum)
+phyla_order
+
+#Ensure unique levels and set the factor
+all_levels <- unique(c('<1%', phyla_order))
+
+# Reorder Feed factor levels
+smelt1 <- smelt1 %>%
+  mutate(Feed = factor(Feed, levels = c("SIL", "BG", "TN")))
+
+# Make the Phyla factor ordered by TotalCount, with '<1%' at the top
+smelt1 <- smelt1 %>%
+  mutate(Phylum = factor(Phylum, levels = all_levels))
+
+
+ ### Step 2: Create the Bar Plot
+
+# Make stacked barplot
+g2 <- ggplot(smelt1, aes(x = Sample, y = Abundance, fill = Phylum)) +
+  geom_bar(aes(fill = Phylum),stat = "identity", position = "stack")+
+  facet_wrap(~Feed, scales= "free_x", nrow=1)+
+  labs(y = "Relative abundance (%)", x = "Rumen Sample") +
+   guides(fill = guide_legend(ncol = 4)) +
+  theme(legend.position = "bottom", 
+        strip.background = element_blank(), 
+     axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))+ # Rotate labels
+  scale_fill_manual(values = c("darkblue","darkgoldenrod1","darkseagreen",
+        "darkorchid","darkolivegreen","lightskyblue","darkgreen","deeppink",
+        "khaki2","firebrick"))
+
+# Display the plot
+g2
+ggsave("phyla_composition.png", plot = g2, dpi = 600, width = 17, height = 20,
+       units = "cm")
+
+rm(phylatreatmentnorm, phylatreatmentnorm.phy, smelt1, phyla.df, cutoff, 
+   lowAbundant, phyla_order ,all_levels,g2)
+
+```
+##Taxonomic composition: Treatment and low abundant FAMILY
+```{r}
+#familytreatmentnorm
+
+#Re-normalise
+familytreatmentnorm<- transform_sample_counts(familytreatmentnorm.phy, function(x) x/ sum(x) *100)
+
+#Taxonomy of family 
+taxonomy_df <- as.data.frame(tax_table(familytreatmentnorm))
+
+# Assuming `taxonomy_df` has columns named "Domain" and "Family"
+family_counts <- taxonomy_df %>%
+  filter(Domain %in% c("Bacteria", "Archaea")) %>%  # Filter rows for the desired domains
+  group_by(Domain) %>%                             # Group by domain
+  summarise(FamilyCount = n_distinct(Family))      # Count unique families
+
+# View results
+print(family_counts)
+
+# Convert phyloseq to a large data frame
+smelt1 <- psmelt(familytreatmentnorm)
+
+# Get counts per family
+family.df <- smelt1 %>% 
+  group_by(Family) %>%
+  summarise(Count = sum(Abundance), .groups = 'drop')
+
+# Select the cutoff (e.g., 1% of total count)
+cutoff <- 0.01 * sum(smelt1$Abundance)
+
+# Select low-abundant family (with total counts below the cutoff)
+lowAbundant <- family.df %>% filter(Count <= cutoff) %>% pull(Family)
+
+# Substitute Genus names to "<1%" for the low-abundant family
+smelt1 <- smelt1 %>%
+  mutate(Family = ifelse(Family %in% lowAbundant, '<1%', Family))
+
+# Calculate total abundance per family for ordering
+family_order <- family.df %>%
+  mutate(Family = ifelse(Family %in% lowAbundant, '<1%', Family)) %>%
+  group_by(Family) %>%
+  summarise(TotalCount = sum(Count), .groups = 'drop') %>%
+  arrange(TotalCount) %>%
+  pull(Family)
+family_order
+
+#Ensure unique levels and set the factor
+all_levels <- unique(c('<1%', family_order))
+
+# Reorder Feed factor levels
+smelt1 <- smelt1 %>%
+  mutate(Feed = factor(Feed, levels = c("SIL", "BG", "TN")))
+
+# Make the family factor ordered by TotalCount, with '<1%' at the top
+smelt1 <- smelt1 %>%
+  mutate(Family = factor(Family, levels = all_levels))
+
+
+ ### Step 2: Create the Bar Plot
+
+# Make stacked barplot
+g2 <- ggplot(smelt1, aes(x = Sample, y = Abundance, fill = Family)) +
+  geom_bar(aes(fill = Family), stat = "identity",position = "stack")+
+  facet_wrap(~Feed, scales= "free_x", nrow=1)+
+  labs(y = "Relative abundance (%)", x = "Rumen Sample") +
+   guides(fill = guide_legend(ncol = 4)) +
+  theme(legend.position = "bottom", 
+        strip.background = element_blank(), 
+     axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))+ # Rotate labels
+   scale_fill_manual(values = c("darkblue","darkgoldenrod1","darkseagreen",
+        "darkorchid","darkolivegreen","lightskyblue","darkgreen","deeppink",
+        "khaki2","firebrick","brown1","darkorange1","cyan1","royalblue4","darksalmon"  ,"dodgerblue3","steelblue", "darkolivegreen1","brown4","darkorange4","cyan4","darkgrey"))
+
+# Display the plot
+g2
+ggsave("family_composition.png", plot = g2, width = 17, height = 20, units = "cm" , dpi = 600)
+
+rm(familytreatmentnorm, familyTreatmentnorm.phy, FamilyTreatment.phy, family.df, cutoff, lowAbundant, family_order ,all_levels,g2, taxonomy_df)
+```
+#Family relative abundance by treatment averages
+```{r}
+#Using smelt1
+
+# Calculate average abundance by Phylum, Treatment, Period, and Interaction
+average_feed <- smelt1 %>%
+  group_by(Family, Feed) %>%
+  summarise(Average_Abundance = mean(Abundance, na.rm = TRUE)) %>%
+  ungroup()
+#Average feed wide
+average_feed_wide <- average_feed %>%
+  pivot_wider(
+    names_from = Feed,                # Create new columns from the 'Feed' values
+    values_from = Average_Abundance,  # Fill those columns with the 'Average_Abundance'
+    values_fill = 0 ) 
+write.xlsx(average_feed_wide, file = "familyrelabund_feed.xlsx", rowNames= FALSE)
+
+# Calculate the standard error for each Abundance
+se_treat <- smelt1 %>%
+  group_by(Family) %>%
+  summarise(
+    Count = n(),
+    StandardError = sd(Abundance, na.rm = TRUE) / sqrt(n())
+  ) %>%
+  ungroup()
+write.table(se_treat, file = "se_family_treat_relabund.txt")
+
+
+#Shapiro and Levene of Phylum
+library(purrr)
+
+# Perform Shapiro-Wilk test for each Phylum
+shapiro_results <- smelt1 %>%
+  group_by(Family) %>%
+  summarise(
+    W_statistic = tryCatch(shapiro.test(Abundance)$statistic, error = function(e) NA),
+    p_value = tryCatch(shapiro.test(Abundance)$p.value, error = function(e) NA)
+  ) %>%
+  ungroup()
+
+write.table(shapiro_results, file = "shapiro_results_family_relabund.txt")
+
+# Perform Levene's test for each Phylum
+levene_results <- smelt1 %>%
+  group_by(Family) %>%
+  summarise(
+    Test_Statistic = tryCatch(leveneTest(Abundance ~ Feed)$`F value`[1], error = function(e) NA),
+    p_value = tryCatch(leveneTest(Abundance ~ Feed)$`Pr(>F)`[1], error = function(e) NA)
+  ) %>%
+  ungroup()
+
+write.table(levene_results, file = "levene_results_family_relabund.txt")
+
+# Filter metabolites with p-value < 0.05
+significant_family <- shapiro_results %>%
+  filter(p_value < 0.05) %>%
+  pull(Family)  # Extract the list of significant Phylum
+
+#Perform Kruskal-Wallis test for each significant metabolite
+kruskal_results <- smelt1 %>%
+  filter(Family %in% significant_family) %>%
+  group_by(Family) %>%
+  summarise(
+    KW_treatment = tryCatch(kruskal.test(Abundance ~ Feed)$p.value, error = function(e) NA),
+    KW_period = tryCatch(kruskal.test(Abundance ~ Timepoint)$p.value, error = function(e) NA),
+    KW_TP = tryCatch(kruskal.test(Abundance ~ TP)$p.value, error = function(e) NA)
+  ) %>%
+  ungroup()
+write.xlsx(kruskal_results, file = "kruskal_results_family_relabund.xlsx")
+
+#Manual Anova
+b<- filter(smelt1, Family == "UBA932")
+bac<- aov(Abundance ~ Feed*Timepoint, data = b)
+summary(bac)
+rm(bac, b)
+
+b<- filter(smelt1, Family == "UBA1067")
+bac<- aov(Abundance ~ Feed*Timepoint, data = b)
+summary(bac)
+rm(bac, b)
+
+b<- filter(smelt1, Family == "UBA660")
+bac<- aov(Abundance ~ Feed*Timepoint, data = b)
+summary(bac)
+rm(bac, b)
+
+b<- filter(smelt1, Family == "Anaerovoracaceae")
+bac<- aov(Abundance ~ Feed*Timepoint, data = b)
+summary(bac)
+rm(bac, b)
+
+b<- filter(smelt1, Family == "Acutalibacteraceae")
+bac<- aov(Abundance ~ Feed*Timepoint, data = b)
+summary(bac)
+rm(bac, b)
+
+b<- filter(smelt1, Family == "Acidaminococcaceae")
+bac<- aov(Abundance ~ Feed*Timepoint, data = b)
+summary(bac)
+rm(bac, b)
+
+b<- filter(smelt1, Family == "Oscillospiraceae_88309")
+bac<- aov(Abundance ~ Feed*Timepoint, data = b)
+summary(bac)
+rm(bac, b)
+
+#Pairwise t-test among significant
+b<- filter(smelt1, Family == "UBA932")
+pairwise.t.test(b$Abundance, b$Feed, p.adjust.method = "BH")
+
+b<- filter(smelt1, Family == "F082")
+pairwise.t.test(b$Abundance, b$Feed, p.adjust.method = "BH")
+
+b<- filter(smelt1, Family == "UBA3636")
+pairwise.t.test(b$Abundance, b$Feed, p.adjust.method = "BH")
+
+b<- filter(smelt1, Family == "Oscillospiraceae_88309")
+pairwise.t.test(b$Abundance, b$Feed, p.adjust.method = "BH")
+
+b<- filter(smelt1, Family == "Atopobiaceae")
+pairwise.t.test(b$Abundance, b$Feed, p.adjust.method = "BH")
+rm(b)
+
+rm(average_feed, average_feed_wide, se_treat, shapiro_results, levene_results,
+   significant_family, kruskal_results, smelt1)
+```
+#PCA of filtered norm Genus Treatment
+```{r}
+#Genus PCA
+GenusTreatment.phy
+#Extract OTU table and convert to matrix
+otu_matrix<- as(otu_table(GenusTreatment.phy), "matrix")
+#Perform PCA using the RDA function
+pca_results<- rda(otu_matrix)
+#View summary of results
+summary(pca_results)
+#Extract PCA scores for Treatment
+pca_scores<- scores(pca_results, display = "sites")
+#Extract PCA scores for OTU's
+pca_loadings<- scores(pca_results, display = "species")
+#Create a dataframe for plotting
+pca_df<- data.frame(Sample = rownames(pca_scores),
+                    PC1 = pca_scores[,1],
+                    PC2 = pca_scores[,2])
+#Plot PCA results ussing ggplot2
+ggplot(pca_df, aes(x= PC1, y=PC2, label = Sample))+
+  geom_point(size= 3)+
+  geom_text(vjust = 1.5, hjust = 1.5)+
+  labs(title = "Genus PCA",
+       x = "PC1",
+       y = "PC2")+
+  theme_minimal()
+
+rm(otu_matrix, pca_results, pca_scores, pca_loadings, pca_df)
+```
+#PCA Genus Treatment Extraction method
+```{r}
+#Extract the OTU table and sample data
+otu_table<- otu_table(GenusTreatment.phy)
+sample_data<- sample_data(GenusTreatment.phy)
+
+#Convert OTU table to a data frame and it
+otu_table_df<- as.data.frame((otu_table))
+
+#Combine OTU table with sample data
+#Make sure the sample names match
+Genustreat<- cbind(sample_data, otu_table_df)
+
+# Keep only columns that do not have all zeros
+Genustreat <- Genustreat[, colSums(Genustreat != 0) > 0]
+# Reorder Feed levels in the Genustreat data frame
+Genustreat$Feed <- factor(Genustreat$Feed, levels = c("SIL", "BG", "TN"))
+
+# Perform PCA, excluding the first few columns (metadata)
+metadata_columns <- ncol(sample_data)
+GenusPRcomp <- prcomp(Genustreat[, -(1:metadata_columns)], scale. = TRUE)
+
+
+genusnormPCA<- autoplot(GenusPRcomp,
+                  data=Genustreat,
+                  colour="Feed",
+                  frame=TRUE, 
+                  frame.type='norm',
+                  frame.alpha= 0,
+                  frame.linewidth = 10,
+                  frame.linetype = "dashed")+
+                  geom_point(aes(color = Feed), size = 1)+
+                  scale_color_manual(values = c("blue","darkgreen","grey"))+
+                  theme_classic()+
+                  geom_rect(aes(xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf), 
+            fill = NA, color = "black", size = 1.5)+
+                  labs(tag = "(a)") 
+                  #ggtitle("Principal component  analysis",  # Main title
+                  #       subtitle = "ASV read counts from all feed treatments at genus level")  # Subtitle 
+                
+
+genusnormPCA
+ggsave("pca_plot.png", plot = genusnormPCA,dpi = 600)
+
+
+# Create a data frame for ggplot
+pca_data <- as.data.frame(GenusPRcomp$x)
+pca_data <- cbind(pca_data, sample_data)
+
+
+
+
+# Plot PCA using ggplot2
+PCAgenus <- ggplot(pca_data, aes(x = PC1, y = PC2, color = Feed)) +
+  geom_point(size = 1) +
+  stat_ellipse(type = "norm") +
+  labs(title = "PCA of Treatments",
+       x = "PC1",
+       y = "PC2") +
+  theme_minimal() +
+  theme(legend.position = "bottom") +
+  scale_color_manual(values = c("blue", "darkgreen", "grey"))+
+  theme_classic()
+
+# Print the PCA plot
+PCAgenus
+
+
+#Creating a BIPLOT
+# Extract PCA scores for samples
+pca_scores <- as.data.frame(GenusPRcomp$x)
+pca_scores$Sample <- rownames(pca_scores)  # Adding sample names
+
+# Extract PCA loadings for genera
+pca_loadings <- as.data.frame(GenusPRcomp$rotation)
+pca_loadings$Genus <- rownames(pca_loadings)  # Adding genus names
+
+# Create biplot
+ggplot() +
+  geom_point(data = pca_scores, aes(x = PC1, y = PC2), color = "blue", size = 3) +  # Samples
+  geom_segment(data = pca_loadings, aes(x = 0, y = 0, xend = PC1*5, yend = PC2*5), 
+               arrow = arrow(length = unit(0.2, "cm")), color = "red") +  # Genera vectors
+  geom_text(data = pca_loadings, aes(x = PC1*5, y = PC2*5, label = Genus), color = "red", hjust = 0.5, vjust = 0.5) +
+  labs(x = "PC1", y = "PC2") +
+  theme_classic()
+
+# Sort by absolute contribution to PC1 and PC2
+top_pc1 <- pca_loadings[order(abs(pca_loadings$PC1), decreasing = TRUE), ][1:10, ]
+top_pc2 <- pca_loadings[order(abs(pca_loadings$PC2), decreasing = TRUE), ][1:10, ]
+
+# Display top contributing genera
+top_pc1$Genus
+top_pc2$Genus
+
+# Extract variance explained by each PC
+pca_var <- summary(GenusPRcomp)$importance  # Contains standard deviation, proportion, and cumulative variance
+pc1_var <- pca_var[2, "PC1"] * 100  # % variance explained by PC1
+pc2_var <- pca_var[2, "PC2"] * 100  # % variance explained by PC2
+
+# Compute squared loadings (importance of each ASV for PC1 and PC2)
+pca_loadings$PC1_contribution <- 100 * (pca_loadings$PC1^2) / sum(pca_loadings$PC1^2)
+pca_loadings$PC2_contribution <- 100 * (pca_loadings$PC2^2) / sum(pca_loadings$PC2^2)
+
+# Multiply by variance explained by PC1 and PC2 to get % contribution to dataset variation
+pca_loadings$PC1_variation <- pca_loadings$PC1_contribution * (pc1_var / 100)
+pca_loadings$PC2_variation <- pca_loadings$PC2_contribution * (pc2_var / 100)
+
+# Sort ASVs by contribution to PC1 and PC2
+top_pc1 <- pca_loadings[order(-pca_loadings$PC1_contribution), ][1:10, ]
+top_pc2 <- pca_loadings[order(-pca_loadings$PC2_contribution), ][1:10, ]
+
+# Display top ASVs with their % contribution to PC1 and PC2
+top_pc1[, c("Genus", "PC1_variation")]
+top_pc2[, c("Genus", "PC2_variation")]
+
+#ASV to taxonomy
+taxonomy_table <- as.data.frame(tax_table(GenusTreatment.phy))  # Extract ASV taxonomy
+taxonomy_table$ASV <- rownames(taxonomy_table)  # Ensure ASV IDs are in a column
+
+# Merge taxonomy with PCA results
+top_pc1_tax <- merge(top_pc1, taxonomy_table, by.x = "Genus", by.y = "ASV", all.x = TRUE)
+top_pc2_tax <- merge(top_pc2, taxonomy_table, by.x = "Genus", by.y = "ASV", all.x = TRUE)
+
+# Display results
+top_pc1_tax
+top_pc2_tax
+
+#Save the results 
+write.xlsx(top_pc1_tax, "Top_Genus_PC1_variation.xlsx")
+write.xlsx(top_pc2_tax, "Top_Genus_PC2_variation.xlsx")
+
+rm(otu_table, sample_data, otu_table_df, Genustreat, metadata_columns, 
+   GenusPRcomp, pca_data, PCAgenus)
+#rm(genusnormPCA)
+
+
+```
+#UpSetR Feed Treatment Genus
+```{r}
+set.seed(123)
+#Merge by treatment
+treatmentgenus<- merge_samples(GenusTreatment.phy, "Feed")
+treatmentgenus
+
+venn_obj<- as.data.frame(t(otu_table(treatmentgenus)))
+venn_obj_binary<- sapply(venn_obj, function(x) ifelse(x > 0,1,0),
+                         USE.NAMES = T)
+rownames(venn_obj_binary)<- rownames(venn_obj)
+venn_obj_binary<- as.data.frame(venn_obj_binary)
+upset_order<- colnames(venn_obj_binary)
+shared_ASV_plot<- upset(venn_obj_binary, nsets = 6, sets = rev(upset_order),
+                        mainbar.y.label = "Shared ASVs", sets.x.label = 
+                          "ASVs per Treatment", keep.order = T,
+                        order.by = 'freq', 
+                        main.bar.color = "blue")
+png("Shared_ASV_plot.png",width = 7, height = 4.5, units = "in",res = 600)
+shared_ASV_plot
+dev.off()
+
+#UpSet plot
+UpSet<-upset(venn_obj_binary, nset = 3, nintersects = 100, mainbar.y.label = "Shared ASVs" , sets.x.label = "ASVs per Treatment", order.by = c('freq', 'degree'), decreasing = c(TRUE, TRUE),queries = list(list(query = intersects, params = c('BG','SIL','TN'), color = 'blue', active = TRUE)))
+UpSet
+
+
+#Finding out which ASV is shared only between BG and TN / BG and SIL
+tax_table(treatmentgenus)
+
+
+ rm(treatmentgenus, venn_obj, venn_obj_binary, upset_order, shared_ASV_plot,
+   UpSet)
+
+```
+# Realtive Abundance of shared Taxa
+```{r}
+set.seed(123)
+
+library(phylosmith)
+
+#Load phyloseq
+GenusTreatment.phy
+otu_table(GenusTreatment.phy)
+sample_metadata <- as.data.frame(sample_data(GenusTreatment.phy))
+tax_table(GenusTreatment.phy)
+rm(sample_metadata)
+
+#Merge by treatment
+treatmentgenus<- merge_samples(GenusTreatment.phy, "Feed")
+treatmentgenus
+otu_table(treatmentgenus)
+sample_metadata <- as.data.frame(sample_data(treatmentgenus))
+tax_table(GenusTreatment.phy)
+rm(sample_metadata)
+
+#Re-normalise
+treatmentgenus<- transform_sample_counts(treatmentgenus, function(x) x/ sum(x) *100)
+otu_table(treatmentgenus)
+
+#Common taxa between treatment
+commontaxa<- common_taxa(treatmentgenus)
+commontaxa1<- common_taxa(GenusTreatment.phy)
+
+# Subset the original treatmentgenus phyloseq object to keep only the common taxa
+commontaxa_phy <- prune_taxa(commontaxa, treatmentgenus)
+commontaxa_phy1<- prune_taxa(commontaxa1, GenusTreatment.phy)
+
+#Common taxa proportions
+taxa_proportions(commontaxa_phy, "Genus", treatment = "Feed")
+
+#View common taxa phy
+sample_metadata<- sample_data(commontaxa_phy)
+sample_metadata <- as.data.frame(sample_metadata)
+sample_metadata$Feed <- c("BG", "SIL", "TN")  
+sample_metadata$Feed <- as.factor(sample_metadata$Feed)
+sample_data(commontaxa_phy) <- sample_data(sample_metadata)
+unique(sample_data(commontaxa_phy)$Feed)
+
+#Exporting commontaxa_phy as data frame 
+# Convert the OTU table to a data frame
+otu_table_df <- as.data.frame(otu_table(commontaxa_phy))
+# Transpose the OTU table if taxa are rows
+if (!taxa_are_rows(commontaxa_phy)) {
+  otu_table_df <- t(otu_table_df)
+}
+# Convert taxonomy table to a data frame
+taxonomy_df <- as.data.frame(tax_table(commontaxa_phy))
+
+# Combine all components into a single data frame
+# Add taxonomy to the OTU table
+combined_df <- cbind(otu_table_df, taxonomy_df[rownames(otu_table_df), ])
+# Add a column for the total abundance (row sums of the OTU table)
+combined_df$total_abundance <- rowSums(otu_table_df)
+# Order the data frame by total abundance, descending
+ordered_combined_df <- combined_df[order(combined_df$total_abundance, decreasing = TRUE), ]
+# Remove the 'total_abundance' column if no longer needed
+ordered_combined_df$total_abundance <- NULL
+# Save the resulting data frame to a CSV file
+write.xlsx(ordered_combined_df, "Abundance_treatment_shared_genera.xlsx", row.names = FALSE)
+
+#Abundance Heatmap
+heatmap_plot<- abundance_heatmap(commontaxa_phy, classification = 'Genus', treatment = 'Feed')
+heatmap_plot <- heatmap_plot +
+  theme(
+    axis.text.x = element_text(size = 10),   # Adjust the size as needed
+    axis.text.y = element_text(size = 8))  # Adjust the size as needed
+heatmap_plot
+ggsave("heatmap_plot.png", plot = heatmap_plot, width = 8.27, height = 11.69,
+       dpi = 600)
+
+abundance_heatmap(commontaxa_phy, classification = 'Genus', treatment_labels = NULL)
+
+rm(commontaxa_phy, commontaxa_phy1, heatmap_plot, commontaxa, commontaxa1, sample_metadata, otu_table_df,taxonomy_df,
+   combined_df, ordered_combined_df)
+```
+#Relative abundance of unique taxa
+```{r}
+# Extract unique taxa as a list from the function
+unique_taxa_list<- unique_taxa(GenusTreatment.phy, treatment = "Feed", subset = NULL)
+#Relative abundance of treatmentgenus
+treatmentgenus<- transform_sample_counts(treatmentgenus, function(x) x/ sum(x) *100)
+# Extract OTU table from the relative Genus
+treatmentgenus_df <- as.data.frame(otu_table(treatmentgenus))
+
+# Transpose if taxa are not rows
+if (!taxa_are_rows(treatmentgenus)) {
+  treatmentgenus_df <- t(treatmentgenus_df)
+}
+
+# Extract taxonomy table
+taxonomy <- as.data.frame(tax_table(treatmentgenus))
+
+# Combine taxonomy with relative abundance for each ASV
+combined_df <- cbind(taxonomy, treatmentgenus_df)
+
+# For each treatment, filter and export relative abundance data
+unique_taxa_by_treatment_with_abundance <- lapply(names(unique_taxa_list), function(treatment) {
+  asvs <- unique_taxa_list[[treatment]]  # Get unique ASVs for the treatment
+  df <- combined_df[rownames(combined_df) %in% asvs, ]
+  df <- cbind(ASV = rownames(df), df)  # Add ASV as a column
+  write.xlsx(df, paste0("unique_taxa_with_abundance_", treatment, ".csv"), row.names = FALSE)  # Export
+  return(df)  # Return data frame for further use
+})
+
+# Optionally, combine all treatments into a single data frame
+all_unique_taxa_with_abundance <- do.call(rbind, unique_taxa_by_treatment_with_abundance)
+
+# Identify numeric columns (abundance columns)
+numeric_cols <- sapply(all_unique_taxa_with_abundance, is.numeric)
+
+# Apply rounding to numeric columns only
+all_unique_taxa_with_abundance[, numeric_cols] <- lapply(
+  all_unique_taxa_with_abundance[, numeric_cols],
+  signif,
+  digits = 3
+)
+
+# Save the combined data frame
+write.xlsx(all_unique_taxa_with_abundance, "unique_taxa_with_abundance_all_treatments.xlsx", row.names = FALSE)
+
+rm(unique_taxa_list, treatmentgenus, treatmentgenus_df, taxonomy,
+   combined_df, unique_taxa_by_treatment_with_abundance, numeric_cols, all_unique_taxa_with_abundance)
+```
+#Plotting Alpha Diversity of
+```{r}
+treatment.phy #raw counts
+
+a<- plot_richness(treatment.phy, 
+              color="Feed", x="Feed", 
+              title="Alpha diversity vs Treatment") + 
+  geom_boxplot()
+a
+
+b<- plot_richness(treatment.phy, 
+              measures=c("Chao1", "ACE", "InvSimpson"),
+              color="Feed", x="Feed", 
+              title="Alpha diversity vs Treatment") + 
+  geom_boxplot()
+b
+
+rm(a,b)
+```
+#Calculate Alpha Diversities and Stats
+```{r}
+library(car)
+library(tidyr)
+
+#Calculating Alpha Diversity
+alpha_richness = estimate_richness(
+  treatment.phy)
+head(alpha_richness)
+
+#Calculating Pileou Eveness
+H<- alpha_richness$Shannon
+S1<- alpha_richness$Observed
+S<- log(S1)
+eveness<- H/S
+alpha_richness$Evenness = eveness
+print(alpha_richness)
+
+#Turning alpha calculations into a data frame
+alphadf<- data.frame(alpha_richness, sample_data(treatment.phy))
+head(alphadf)
+# Reorder Feed levels in the Genustreat data frame
+alphadf$Feed<- factor(Genustreat$Feed, levels = c("SIL", "BG", "TN"))
+alpha_df1<- gather(alphadf, key = "Measure", value = "Value", Chao1, Evenness, 
+                   InvSimpson)
+
+#Plotting Chao1, Pileou Evenness and InvSimpson
+# Define your custom labels
+label_vector <- c("Chao1" = "A: Chao1", "Evenness" = "B: Pielou's Evenness", 
+                  "InvSimpson" = "C: Inverse Simpson")
+
+alpha<- ggplot(data = alpha_df1, aes(x = Feed, y = Value, fill = Feed)) + 
+        facet_wrap(~Measure, scale = "free", labeller = labeller(Measure
+                    = label_vector)) +
+        geom_boxplot() + theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+        ylab("Alpha Diversity Measure")+ theme_classic()+
+        scale_fill_manual(values = c("SIL"="blue", "BG"="darkgreen", 
+                                      "TN"="grey"))+
+  theme(
+    panel.border = element_rect(color = "black", fill = NA, size = 1))
+alpha
+ggsave("alpha_diversity_plot.png", plot = alpha,width = 170, 
+       height = 100, units = "mm", dpi = 600)
+
+
+#Average and SEM of Chao1, Evenness and InvSimpson
+# Calculate SEM function
+sem <- function(x) {
+  sd(x) / sqrt(length(x))
+}
+
+#Summarise data
+summary_feed <- alphadf %>%
+  group_by(Feed) %>%
+  summarise(
+    Mean_Chao1 = mean(Chao1, na.rm = TRUE),
+    SEM_Chao1 = sem(Chao1),
+    Mean_Evenness = mean(Evenness, na.rm = TRUE),
+    SEM_Evenness = sem(Evenness),
+    Mean_InvSimpson = mean(InvSimpson, na.rm = TRUE),
+    SEM_InvSimpson = sem(InvSimpson)
+  )
+summary_period<-alphadf %>%
+  group_by(Timepoint) %>%
+  summarise(
+    Mean_Chao1 = mean(Chao1, na.rm = TRUE),
+    SEM_Chao1 = sem(Chao1),
+    Mean_Evenness = mean(Evenness, na.rm = TRUE),
+    SEM_Evenness = sem(Evenness),
+    Mean_InvSimpson = mean(InvSimpson, na.rm = TRUE),
+    SEM_InvSimpson = sem(InvSimpson)
+  )
+
+summary_TP<- alphadf %>%
+  group_by(TP) %>%
+  summarise(
+    Mean_Chao1 = mean(Chao1, na.rm = TRUE),
+    SEM_Chao1 = sem(Chao1),
+    Mean_Evenness = mean(Evenness, na.rm = TRUE),
+    SEM_Evenness = sem(Evenness),
+    Mean_InvSimpson = mean(InvSimpson, na.rm = TRUE),
+    SEM_InvSimpson = sem(InvSimpson)
+  )
+
+summary<- cbind(summary_feed, summary_period, summary_TP)
+write.csv(summary, "Averages_Alpha_diversity.csV", row.names = TRUE)
+
+#Standard error by Chao1, Evenness and Inverse Simpson
+library(plotrix)
+std.error(alphadf$Chao1, na.rm = TRUE)
+std.error(alphadf$Evenness, na.rm = TRUE)
+std.error(alphadf$InvSimpson, na.rm = TRUE)
+
+#Shapiro normality test
+# Perform Shapiro-Wilk test for Chao1
+shapiro_test_chao1 <- shapiro.test(alphadf$Chao1)
+print(shapiro_test_chao1)
+levene_test_chao1_treatment <- leveneTest(Chao1 ~ Feed, data = alphadf)
+print(levene_test_chao1_treatment)
+# Perform Shapiro-Wilk test for Evenness
+shapiro_test_Evenness <- shapiro.test(alphadf$Evenness)
+print(shapiro_test_Evenness)
+levene_test_Evenness_treatment <- leveneTest(Evenness ~ Feed, data = alphadf)
+print(levene_test_Evenness_treatment)
+# Perform Shapiro-Wilk test for InvSimpson
+shapiro_test_InvSimpson <- shapiro.test(alphadf$InvSimpson)
+print(shapiro_test_InvSimpson)
+levene_test_InvSimpson_treatment <- leveneTest(InvSimpson ~ Feed, data = alphadf)
+print(levene_test_InvSimpson_treatment)
+
+#Perform ANOVA
+# Two-Way ANOVA for Chao1
+anova_chao1 <- aov(Chao1 ~ Feed * Timepoint, data = alphadf)
+summary(anova_chao1)
+
+# Two-Way ANOVA for Evenness
+anova_evenness <- aov(Evenness ~ Feed * Timepoint, data = alphadf)
+summary(anova_evenness)
+
+# Two-Way ANOVA for InvSimpson
+anova_invsimpson <- aov(InvSimpson ~ Feed * Timepoint, data = alphadf)
+summary(anova_invsimpson)
+
+# Check assumptions - Normality of residuals
+par(mfrow = c(2, 2))
+plot(anova_chao1)
+plot(anova_evenness)
+plot(anova_invsimpson)
+
+#Function to extract ANOVA results
+extract_anova_results <- function(aov_model, metric_name) {
+  summary_aov <- summary(aov_model)
+  anova_table <- summary_aov[[1]]
+  
+  # Extract relevant information
+  df <- data.frame(
+    Metric = metric_name,
+    Source = rownames(anova_table),
+    Df = anova_table[, "Df"],
+    Sum_Sq = anova_table[, "Sum Sq"],
+    Mean_Sq = anova_table[, "Mean Sq"],
+    F_value = anova_table[, "F value"],
+    Pr_F = anova_table[, "Pr(>F)"]
+  )
+  
+  return(df)
+}
+
+results_chao1 <- extract_anova_results(anova_chao1, "Chao1")
+results_evenness <- extract_anova_results(anova_evenness, "Evenness")
+results_invsimpson <- extract_anova_results(anova_invsimpson, "InvSimpson")
+
+# Combine all results into a single data frame
+combined_results <- bind_rows(results_chao1, results_evenness, results_invsimpson)
+write.csv(combined_results, "Stats_Alpha_diversity.csV", row.names = TRUE)
+
+# Print the combined results
+print(combined_results)
+
+rm(eveness, H, S, S1, extract_anova_results, sem, alphadf, alpha_df1 ,
+   alpha_richness, summary, summary_df, summary_feed, summary_period, summary_TP,
+   shapiro_test_chao1, levene_test_chao1_treatment, shapiro_test_evenness, 
+   levene_test_Evenness_treatment, shapiro_test_Evenness, shapiro_test_invsimpson,
+   levene_test_InvSimpson_treatment,anova_chao1, anova_evenness, anova_invsimpson,
+   results_chao1, results_evenness, results_invsimpson, combined_results,
+   shapiro_test_InvSimpson)
+```
+#BrayCurtis
+```{r}
+# Calculating the ordination (will be used later for plotting)
+ord <- ordinate(treatmentnorm.phy, 
+                distance = "bray",
+                method = "PCoA")
+
+pcoa<-plot_ordination(GenusTreatment.phy, ord, type="samples",
+                color="Feed") + geom_point(size=1) +
+  stat_ellipse() +
+  #ggtitle("Beta diversity", 
+          #subtitle="Unconstrained ordination of samples, PCoA with Bray-Curtis distances")+ 
+  theme_classic()+
+   labs(
+    #   x = "PCoA1 (20.4%)",  # Rename x-axis
+    #   y = "PCoA2 (11.9%)",  # Rename y-axis
+       tag = "(b)") +
+     scale_color_manual(values = c("darkgreen", "blue", "grey")) +  # Recolor the points
+   theme(
+    panel.border = element_rect(color = "black", fill = NA, size = 1),
+    legend.position = "none")
+pcoa
+
+ggsave("PcoA_plot.png", plot = pcoa, dpi = 600)
+
+
+#Find which genera contributed the most to the variation in PCOA plot
+## Extract ASV/genus abundance table
+asv_table <- as.data.frame(otu_table(treatmentnorm.phy))  # Extract ASV counts
+asv_table <- t(asv_table)  # Transpose to have ASVs as rows
+
+# Check dimensions
+dim(asv_table)
+
+# Extract sample scores from PCoA
+sample_scores <- as.data.frame(ord$vectors[, 1:2])  # Extract PCoA1 and PCoA2 scores
+colnames(sample_scores) <- c("PCoA1", "PCoA2")  # Rename
+sample_scores$Sample <- rownames(sample_scores)  # Add sample names
+
+# Check
+head(sample_scores)
+
+# Compute correlation of ASV abundances with PCoA1 and PCoA2
+cor_pcoa1 <- apply(asv_table, 1, function(x) cor(x, sample_scores$PCoA1, method = "spearman"))
+cor_pcoa2 <- apply(asv_table, 1, function(x) cor(x, sample_scores$PCoA2, method = "spearman"))
+
+# Convert to dataframe
+asv_contributions <- data.frame(
+  ASV = rownames(asv_table),
+  PCoA1_correlation = cor_pcoa1,
+  PCoA2_correlation = cor_pcoa2
+)
+
+# Compute squared contributions
+asv_contributions$PCoA1_contribution <- 100 * (asv_contributions$PCoA1_correlation^2) / sum(asv_contributions$PCoA1_correlation^2)
+asv_contributions$PCoA2_contribution <- 100 * (asv_contributions$PCoA2_correlation^2) / sum(asv_contributions$PCoA2_correlation^2)
+
+# Scale by total variance explained
+asv_contributions$PCoA1_variation <- asv_contributions$PCoA1_contribution * (pcoa1_var / 100)
+asv_contributions$PCoA2_variation <- asv_contributions$PCoA2_contribution * (pcoa2_var / 100)
+
+# Sort by contribution
+top_pcoa1 <- asv_contributions[order(-asv_contributions$PCoA1_variation), ][1:10, ]
+top_pcoa2 <- asv_contributions[order(-asv_contributions$PCoA2_variation), ][1:10, ]
+
+# View results
+print(top_pcoa1)
+print(top_pcoa2)
+
+# Extract taxonomy table from phyloseq
+taxonomy_table <- as.data.frame(tax_table(treatmentnorm.phy))
+taxonomy_table$ASV <- rownames(taxonomy_table)  # Ensure ASV column exists
+
+# Merge taxonomy with PCoA results
+top_pcoa1_tax <- merge(top_pcoa1, taxonomy_table, by = "ASV", all.x = TRUE)
+top_pcoa2_tax <- merge(top_pcoa2, taxonomy_table, by = "ASV", all.x = TRUE)
+
+# Display results
+print(top_pcoa1_tax)
+print(top_pcoa2_tax)
+
+```
+#Hierarchial Clustering
+```{r}
+# Calculate distance matrix (using phyloseq)
+bray_dist <- phyloseq::distance(treatmentnorm.phy, method="bray")
+as.matrix(bray_dist)[1:5,1:5]
+
+# Perform hierarchical clustering
+bray_clust <- hclust(bray_dist, method="average")
+
+# For colouring dendrograms
+library(dendextend) 
+
+# Extract metadata from Phyloseq object
+metadata <- data.frame(sample_data(treatmentnorm.phy))
+
+# Make the dendrogram object
+bray_dend <- as.dendrogram(bray_clust, hang=0.1)
+
+# Get samples ordered as in the deprogram
+dend_samples <- get_leaves_attr(bray_dend, "label")
+
+# Prepare colours foe samples (by former land use)
+Feed_colours <- c('darkblue','grey', 'darkgreen')[
+  match(metadata$Feed, c('SIL','BG', 'TN'))]
+names(Feed_colours) <- rownames(metadata)
+Feed_colours <- Feed_colours[dend_samples]
+
+# Set colours of terminal branches (h=1)
+bray_dend <- color_branches(bray_dend, 
+                            k=length(dend_samples), h=1,  
+                            Feed_colours)
+
+#Open PNG device
+png("dendrogram_plot.png")
+#Adjust margins to ensure the plot fits
+par(mar = c(5,5,4,2)+0.1)
+# Draw plot
+plot(bray_dend, main="Rumenfluid Samples (coloured by Treatment)", 
+     ylab="Distances", leaflab = "none")
+  
+# Add legend
+      legend("bottomright",
+       legend=c('SIL','BG', 'TN'),
+       col=c('darkblue','grey','darkgreen'), 
+       bty="n",lty=1, cex=0.8)
+      
+#Close off PNG      
+dev.off()
+
+rm(bray_dend, dend_samples, bray_clust, Feed_colours, ord)
+```
+#Beta Diversity: PERMANOVA
+```{r}
+adonis_result<-adonis2(bray_dist ~ Feed/Timepoint/Animal,
+        strata = metadata$Feed,
+        data = metadata, permutations = 1000)
+
+adonis_df<- as.data.frame(adonis_result)
+
+# Perform adonis2 analysis for each term and interaction
+## Timepoint only
+adonis_timepoint <- adonis2(bray_dist ~ Timepoint,
+                            strata = metadata$Feed,
+                            data = metadata, permutations = 1000)
+adonis_TP_df<- as.data.frame(adonis_timepoint)
+
+## Feed:Animal interaction
+adonis_feed_animal <- adonis2(bray_dist ~ Feed * Animal,
+                              strata = metadata$Feed,
+                              data = metadata, permutations = 1000)
+adonis_Feed_Animal_df<- as.data.frame(adonis_feed_animal)
+
+#Combine the dataframe
+adonisdf<- bind_rows(adonis_df,adonis_TP_df,adonis_Feed_Animal_df)
+
+#Save df as csv
+write.csv(adonisdf, "adonisdf.csv", row.names = TRUE)
+
+rm(metadata, bray_dist, adonis_result, adonis_df,adonis_timepoint, adonis_TP_df,
+   adonis_feed_animal, adonis_Feed_Animal_df, adonis_df, adonisdf)
+
+```
+#LDA of treatment.phy
+```{r}
+set.seed(123)
+
+library(microbiomeMarker)
+
+# Check taxonomic ranks
+taxa_ranks <- rank_names(treatment.phy)
+print(taxa_ranks)
+
+# Rename taxonomic ranks if necessary
+tax_table(treatment.phy) <- tax_table(treatment.phy) %>%
+  `colnames<-`(c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus", "Species"))
+
+
+#Genus
+lefse_results <- run_lefse(
+  ps = treatment.phy,  # Your phyloseq object
+  group = "Feed",               # Grouping variable in the sample data
+  taxa_rank = "Genus",          # Taxonomic rank for the analysis
+  kw_cutoff = 0.05,             # P-value cutoff for the Kruskal-Wallis test
+  lda_cutoff = 2.0,             # LDA score cutoff
+  bootstrap_n = 30,             # Number of bootstraps
+  wilcoxon_cutoff = 0.05        # P-value cutoff for the pairwise Wilcoxon test
+)
+
+# View the results
+print(lefse_results)
+show(lefse_results)
+
+# Plot the LDA scores
+plot_ef_bar(lefse_results)
+ggsave("Genus_lda_plot.png", dpi = 600)
+
+a<- plot_ef_bar(lefse_results)
+a
+
+png("Color_genus_LDA_plot.png", width = 8.3, height = 5, units = "in",res = 600)
+b<- a +scale_fill_manual(values = c("SIL" = "blue", "BG" = "darkgreen", "TN" = "grey")) +  # Custom colors
+  geom_bar(stat = "identity", color = "black", width = 1) +  # Black outline for bars
+  theme_classic()  # Keep the classic theme (optional)
+b
+dev.off()
+
+ggsave("Color_Genus_lda_plot.png", plot = a, dpi = 600)
+
+
+
+#Family
+lefse_results_family <- run_lefse(
+  ps = treatment.phy,  # Your phyloseq object
+  group = "Feed",               # Grouping variable in the sample data
+  taxa_rank = "Family",          # Taxonomic rank for the analysis
+  kw_cutoff = 0.05,             # P-value cutoff for the Kruskal-Wallis test
+  lda_cutoff = 2.0,             # LDA score cutoff
+  bootstrap_n = 30,             # Number of bootstraps
+  wilcoxon_cutoff = 0.05        # P-value cutoff for the pairwise Wilcoxon test
+)
+
+# View the results
+print(lefse_results_family)
+
+# Plot the LDA scores
+plot_ef_bar(lefse_results_family)
+ggsave("Family_lda_plot.png", dpi = 600)
+
+#Phylum
+lefse_results_phylum <- run_lefse(
+  ps = treatment.phy,  # Your phyloseq object
+  group = "Feed",               # Grouping variable in the sample data
+  taxa_rank = "Phylum",          # Taxonomic rank for the analysis
+  kw_cutoff = 0.05,             # P-value cutoff for the Kruskal-Wallis test
+  lda_cutoff = 2.0,             # LDA score cutoff
+  bootstrap_n = 30,             # Number of bootstraps
+  wilcoxon_cutoff = 0.05        # P-value cutoff for the pairwise Wilcoxon test
+)
+
+# View the results
+print(lefse_results_phylum)
+
+# Plot the LDA scores
+plot_ef_bar(lefse_results_phylum)
+ggsave("Phylum_lda_plot.png", dpi = 600)
+
+rm(taxa_ranks, lefse_results, lefse_results_family, lefse_results_phylum, a, b)
+```
+#DESEQ2 Treatment (Raw counts) Phyloseq 
+```{r}
+set.seed(123)
+#Load package
+library(DESeq2)
+#Raw counts and filtered after 100 counts Treatment Phyloseq
+treatment.phy
+#Convert phyloseq object to DeSeq2 Object
+dds<- phyloseq_to_deseq2(treatment.phy, ~ Feed)
+#dds$Feed<- relevel(dds$Feed, ref = "SIL")
+#Run DESeq2 analysis
+dds<- DESeq(dds)
+
+#Extracting Normalised Counts
+#normalised_counts<- counts(dds, normalized = TRUE)
+#write.table(normalised_counts, "normalised_counts_deseq.txt", sep = "\t")
+
+
+#Results SIL to BG
+res_SIL_BG <- results(dds, contrast = c("Feed", "BG", "SIL"))
+summary(res_SIL_BG)
+sig<- 0.05
+sig_SIL_BG<- res_SIL_BG[which(res_SIL_BG$padj < sig),]
+
+sig_SIL_BG_tab<- cbind(as(sig_SIL_BG, "data.frame"), as(tax_table(treatment.phy)
+                                                        [row.names(sig_SIL_BG),
+                                                          ], "matrix"))
+head(sig_SIL_BG_tab)
+
+
+write.table(sig_SIL_BG_tab, "sig_SIL_BG_deseq.txt", sep = "\t")
+
+#Add to the data frame the column with direction change
+silbg = sig_SIL_BG_tab %>%
+  mutate(direct = ifelse(log2FoldChange >0, "Positive LFC", "Negative LFC"))
+# Update factor levels for 'direct'
+silbg$direct<- factor(silbg$direct, levels = c("Positive LFC", "Negative LFC"))
+# Order the taxa based on log2FoldChange
+silbg <- silbg %>%
+  arrange(desc(log2FoldChange)) %>%
+  mutate(Genus = factor(Genus, levels = unique(Genus)))
+# Make plot
+a<- silbg %>%
+    ggplot(aes(x = Genus, y = log2FoldChange, fill = direct)) + 
+    geom_bar(stat = "identity", width = 0.7, color = "black", 
+             position = position_dodge(width = 0.4)) +
+    geom_errorbar(aes(ymin = log2FoldChange - lfcSE, 
+                      ymax = log2FoldChange + lfcSE), 
+                  width = 0.2, position = position_dodge(0.05), 
+                  color = "black") + 
+    labs(x = "", y = "Log fold change", tag = "(a)") +  
+    ggtitle(label = "", 
+            subtitle="Genus: BG vs SIL") +
+    scale_fill_discrete(name = NULL) +
+    scale_color_discrete(name = NULL) +
+    theme_bw() + 
+    theme(panel.grid.minor.y = element_blank(),
+          axis.text.x = element_text(size = 8, angle = 45, hjust = 1))
+a
+ggsave("SIL_BG_Deseq.png", dpi = 600)
+
+
+#Results SIL to TN
+res_SIL_TN <- results(dds, contrast = c("Feed", "TN", "SIL"))
+summary(res_SIL_TN)
+sig<- 0.05
+sig_SIL_TN<- res_SIL_TN[which(res_SIL_TN$padj < sig),]
+
+sig_SIL_TN_tab<- cbind(as(sig_SIL_TN, "data.frame"), as(tax_table(treatment.phy)
+                                                        [row.names(sig_SIL_TN),
+                                                          ], "matrix"))
+head(sig_SIL_TN_tab)
+
+
+write.table(sig_SIL_TN_tab, "sig_SIL_TN_deseq.txt", sep = "\t")
+
+#Add to the data frame the column with direction change
+siltn = sig_SIL_TN_tab %>%
+  mutate(direct = ifelse(log2FoldChange >0, "Positive LFC", "Negative LFC"))
+# Update factor levels for 'direct'
+siltn$direct<- factor(siltn$direct, levels = c("Positive LFC", "Negative LFC"))
+# Order the taxa based on log2FoldChange
+siltn <- siltn %>%
+  arrange(desc(log2FoldChange)) %>%
+  mutate(Genus = factor(Genus, levels = unique(Genus)))
+# Make plot
+b<- siltn %>%
+    ggplot(aes(x = Genus, y = log2FoldChange, fill = direct)) + 
+    geom_bar(stat = "identity", width = 0.7, color = "black", 
+             position = position_dodge(width = 0.4)) +
+    geom_errorbar(aes(ymin = log2FoldChange - lfcSE, 
+                      ymax = log2FoldChange + lfcSE), 
+                  width = 0.2, position = position_dodge(0.05), 
+                  color = "black") + 
+    labs(x = "", y = "Log fold change", tag = "(b)") +  
+    ggtitle(label = "", 
+            subtitle="Genus: TN vs SIL") +
+    scale_fill_discrete(name = NULL) +
+    scale_color_discrete(name = NULL) +
+    theme_bw() + 
+    theme(panel.grid.minor.y = element_blank(),
+          axis.text.x = element_text(size = 8, angle = 60, hjust = 1))
+b
+ggsave("SIL_TN_Deseq.png", dpi = 600)
+
+#Results BG to TN
+res_BG_TN <- results(dds, contrast = c("Feed", "BG", "TN"))
+summary(res_SIL_TN)
+sig<- 0.05
+sig_BG_TN<- res_BG_TN[which(res_BG_TN$padj < sig),]
+
+sig_BG_TN_tab<- cbind(as(sig_BG_TN, "data.frame"), as(tax_table(treatment.phy)
+                                                        [row.names(sig_BG_TN),
+                                                          ], "matrix"))
+head(sig_BG_TN_tab)
+
+write.table(sig_BG_TN_tab, "sig_TN_BG_deseq.txt", sep = "\t")
+
+#Add to the data frame the column with direction change
+bgtn = sig_BG_TN_tab %>%
+  mutate(direct = ifelse(log2FoldChange >0, "Positive LFC", "Negative LFC"))
+# Update factor levels for 'direct'
+bgtn$direct<- factor(bgtn$direct, levels = c("Positive LFC", "Negative LFC"))
+# Order the taxa based on log2FoldChange
+bgtn <- bgtn %>%
+  arrange(desc(log2FoldChange)) %>%
+  mutate(Genus = factor(Genus, levels = unique(Genus)))
+# Make plot
+c<- bgtn %>%
+    ggplot(aes(x = Genus, y = log2FoldChange, fill = direct)) + 
+    geom_bar(stat = "identity", width = 0.7, color = "black", 
+             position = position_dodge(width = 0.4)) +
+    geom_errorbar(aes(ymin = log2FoldChange - lfcSE, 
+                      ymax = log2FoldChange + lfcSE), 
+                  width = 0.2, position = position_dodge(0.05), 
+                  color = "black") + 
+    labs(x = "", y = "Log fold change", tag = "(c)") +  
+    ggtitle(label = "", 
+            subtitle="Genus: BG vs TN") +
+    scale_fill_discrete(name = NULL) +
+    scale_color_discrete(name = NULL) +
+    theme_bw() + 
+    theme(panel.grid.minor.y = element_blank(),
+          axis.text.x = element_text(size = 8, angle = 45, hjust = 1))
+c
+ggsave("BG_TN_Deseq.png", dpi = 600)
+
+rm(dds, res_SIL_BG, silbg, res_SIL_TN ,siltn, res_BG_TN, bgtn, sig_SIL_BG, sig_SIL_BG_tab, sig_SIL_TN_tab, sig_SIL_TN, sig_BG_TN, 
+ sig_BG_TN_tab, all, normalised_counts)
+```
+#Combine DESEQ plots into one plot
+```{r}
+combined_plot<- a / b / c+
+  plot_layout(guides = "collect")+
+  theme(legend.position = "right")
+jpeg("combined_DESEQ2_plots.jpeg", width = 8.27, height = 10, units = "in", res = 600)
+print(combined_plot)
+dev.off()
+
+rm(a, b, c)
+```
+#Selecting significant taxa from a Normalised Phyloseq
+```{r}
+
+set.seed(123)
+
+library(microbiome)
+library(Hmisc)
+library(corrplot)
+
+GenusTreatment.phy
+
+#Significant Taxa
+tax_list<- c("JC017","Desulfovibrio_R_446353", "Faecousia", "Butyrivibrio_A_168226",
+             "Parafannyhessea", "Sodaliphilus", "Cryptobacteroides", "UBA3636",
+              "Anaeroplasma", "CAG-873", "Fibrobacter", "Limimorpha", "Ga6A1",
+             "Prevotella", "unknown_f__Atopobiaceae", "Pseudobutyrivibrio",
+             "unknown_f__Gastranaerophilaceae", "UBA1412", "Eubacterium_R",
+             "unknown_f__UBA660", "unknown_f__Oscillospiraceae", "Catonella",
+             "RUG11894")
+
+#ASVs and Taxonomy
+cor<- psmelt(GenusTreatment.phy)
+cor_filtered<- cor %>% filter(Genus %in% tax_list)
+#Remove columns not needed
+cor_filtered <- cor_filtered[, !(colnames(cor_filtered) %in% c("OTU", "Kingdom", "Phylum", "Class", "Order", "Family"))]
+# Pivot the data to wide format
+cor_filtered <- cor_filtered %>%
+  pivot_wider(names_from = Genus,  # Create separate columns for each Genus
+              values_from = Abundance)  # Use 'Abundance' for the values in the new columns
+#Save xlsx Cor-filtered
+write.xlsx(cor_filtered, "Cor_filtered.xlsx")
+
+#Upload sig taxa
+library(readxl)
+sigtaxa <- read_csv("sig_taxa.csv")
+View(sigtaxa)
+
+#Test parametric / non parametric
+
+shapiro.test(sigtaxa$Anaeroplasma)
+shapiro.test(sigtaxa$Faecousia)
+
+#therefore use spearman correlation
+
+#Remove column 1-6 of taxa data
+sigtaxa_corr<- sigtaxa[,-c(1:6)]
+
+# Calculate Spearman correlation matrix and p-values
+correlation_result <- rcorr(as.matrix(sigtaxa_corr), type = "spearman")
+
+# Extract correlation matrix and p-value matrix
+correlation_matrix <- correlation_result$r
+p_value_matrix <- correlation_result$P
+
+# Set significance level
+significance_level <- 0.05
+
+# Create a mask for significant correlations
+significant_mask <- p_value_matrix < significance_level
+
+# Set non-significant correlations to NA
+correlation_matrix[!significant_mask] <- NA
+
+# Plot the correlation matrix with significant correlations only
+png("Rumen_sigtaxa_Spearman_Corr_SIG.png", width = 800, height = 600)
+corrplot(correlation_matrix,
+         method = "circle",
+         type = "upper",
+         tl.cex = 1,        # Text label size
+         number.cex = 1.5,  # Correlation number size
+         mar = c(0, 0, 0, 0),  # Margin adjustment
+         na.label = " ",   # Remove non-significant values
+         na.label.col = "white"  # Color for non-significant values
+)
+dev.off()
+
+rm(correlation_matrix, correlation_result, rumen_corr, significant_mask, 
+   significance_level, p_value_matrix, sigtaxa, cor, cor_filtered,
+   tax_list)
+```
+#Correlation of Significant Taxa and Rumen Fermentation
+```{r}
+#Load ferm and taxa data
+library(readr)
+rumen <- read_csv("Fermentation_microbiome_correlation.csv")
+View(rumen)
+
+library(Hmisc)
+library(corrplot)
+
+#Remove column 1-4 of rumen data
+rumen_corr<- rumen[,-c(1:7)]
+
+# Calculate Spearman correlation matrix and p-values
+correlation_result <- rcorr(as.matrix(rumen_corr), type = "spearman")
+
+# Extract correlation matrix and p-value matrix
+correlation_matrix <- correlation_result$r
+#Remove rows and columns from the Correlation_matrix
+correlation_matrix <- correlation_matrix[-(1:22), -(23:45)]
+#P-value
+p_value_matrix <- correlation_result$P
+#Remove rows and columns from the Correlation_matrix
+p_value_matrix <- p_value_matrix[-(1:22), -(23:45)]
+#Removing non significant values
+correlation_matrix[p_value_matrix > 0.05] <- NA
+
+
+# Set significance level
+significance_level <- 0.05
+
+# Create a mask for significant correlations
+significant_mask <- p_value_matrix < significance_level
+
+# Set non-significant correlations to NA
+correlation_matrix[!significant_mask] <- NA
+
+# Plot the correlation matrix with significant correlations only
+png("Rumen_Ferm_Taxa_Corr_SIG.png", width = 17, height = 20, units = "cm", res = 600)
+corrplot(correlation_matrix,
+         method = "circle",
+         type = "upper",
+         tl.cex = 1,        # Text label size
+         tl.col = "black", 
+         number.cex = 1.5,  # Correlation number size
+         mar = c(0, 0, 0, 0),  # Margin adjustment
+         na.label = " ",   # Remove non-significant values
+         na.label.col = "white"  # Color for non-significant values
+)
+dev.off()
+
+
+
+#PHEATMAP
+png("Ferm_Taxa_pheatmap.png", width = 15, height = 15, units = "in", res = 600)
+pheatmap(correlation_matrix,
+         color = colorRampPalette(c("red", "white", "blue"))(50),
+         display_numbers = TRUE,
+         fontsize_number = 10,
+         main = "Significant Microbiome vs. Metabolomics Correlation",
+         cluster_rows = FALSE,  # Disable row clustering
+         cluster_cols = FALSE)  # Disable column clustering
+dev.off()
+
+#GGCORplot
+library(reshape2)
+#Melt the correlation matrix to long format
+cor_long<- melt(correlation_matrix)
+
+#Melt the p-vlaues matrix
+p_values_long<- melt(p_value_matrix)
+
+#Combine correlation and p-values into one data frame
+cor_long$p_value<- p_values_long$value
+
+#Keep only significant correlation p-value
+# Filter to keep rows with p-value less than 0.05 and not NA
+cor_significant <- cor_long[!is.na(cor_long$p_value) & cor_long$p_value < 0.05, ]
+
+
+correlation<-ggplot(cor_significant, aes(Var1, Var2, fill = value)) +
+  geom_tile(color = "white") +
+  scale_fill_gradient2(low = "red", mid = "white", high = "blue", 
+                       midpoint = 0, limit = c(-1, 1), space = "Lab", 
+                       name = "Spearman\nCorrelation") +
+  theme_minimal() + 
+  theme(axis.text.x = element_text(angle = 60, vjust = 1, 
+                                   size = 16, hjust = 1), 
+        axis.text.y = element_text(size = 16),
+   plot.title = element_text(size = 20, hjust = 0.5),  # Increase titlecenter it
+        axis.title.x = element_text(size = 18),   # Increase x-axis title font size
+        axis.title.y = element_text(size = 18))+ # Increase y-axis title font size
+  labs(x = "Fermentation", y = "Microbiome") +
+  coord_fixed(ratio = 0.8) +
+  ggtitle("Correlation between Microbiome and Fermentation")
+correlation
+ggsave("Ferm_Taxa_Square_correlation.png", plot = correlation, width = 12, height = 7, dpi = 600)
+
+
+rm(correlation_matrix, correlation_result, rumen_corr, significant_mask, 
+   significance_level, p_value_matrix, correlation, cor_long, cor_significant, 
+   p_values_long, cor_long, rumen)
+```
+#Plots
+#PCA, PCOA and Ratio
+```{r}
+library(patchwork)
+
+#Plots
+genusnormPCA
+pcoa
+c
+
+#remove legend pcoa
+pcoa <- pcoa + theme(legend.position = "none")
+
+#Combined plots
+combined_plot <- (genusnormPCA + pcoa + c) + 
+ plot_layout(guides = "collect") & 
+  theme(legend.position = "bottom")
+ggsave("combined_plot.png", plot = combined_plot, width = 170, height = 100, units = "mm", dpi = 600)
+
+rm(genusnormPCA, pcoa, c)
+```
+
+
+
+

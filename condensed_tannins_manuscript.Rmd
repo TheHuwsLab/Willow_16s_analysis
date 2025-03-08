@@ -1,0 +1,328 @@
+# Instal Packages
+```{r}
+library(tidyverse)
+library(dplyr)
+install.packages("dplR")
+install.packages("dplyr")
+library(readxl)
+library(ggplot2)
+library(GGally)
+library(rstatix) # shapiro test by group
+library(patchwork) # multi figures
+library(knitr); library(kableExtra); library(broom); library(ggfortify); library(see)
+library(performance);library(car); library(calibrate)
+library(leaps) # best subset selection 
+library(Hmisc); library(ggpubr); library(corrr); library(ggcorrplot) # correlations
+library(ggridges) # distribution plots
+library(ggeasy) # add easy titles
+library(pastecs) # nice summary of descriptive statistics
+library(data.table)
+install.packages("plotrix")
+install.packages("AID")
+library(AID)
+library(plotrix)
+library(rmarkdown)
+install.packages("rmarkdown")
+library(ggsignif)
+install.packages("multcomp")
+library(multcomp)
+```
+
+```{r}
+#Fresh vs frozen averages, SEM and p-value
+
+library(readxl)
+f <- read_excel("Tannins_Zeller.xlsx", 
+    sheet = "content_R")
+View(f)
+
+#Bound, Averages and S.E.M
+tapply(f$Bound, INDEX = f$Pres, FUN = mean)
+sd<- sd(f$Bound)
+n<- length(f$Bound)
+sem<- sd/sqrt(n)
+shapiro.test(f$Bound)
+leveneTest(Bound~Pres, data = f)
+kruskal.test(Bound~Pres, data = f )
+#bound<- aov(Bound~Pres, data = f)
+#summary(bound)
+
+#Unbound
+tapply(f$Unbound, INDEX = f$Pres, FUN = mean)
+sd<- sd(f$Unbound)
+n<- length(f$Unbound)
+sem<- sd/sqrt(n)
+shapiro.test(f$Unbound)
+leveneTest(Unbound~Pres, data = f)
+kruskal.test(Unbound~Pres, data = f )
+
+#Total
+tapply(f$Total, INDEX = f$Pres, FUN = mean)
+sd<- sd(f$Total)
+n<- length(f$Total)
+sem<- sd/sqrt(n)
+shapiro.test(f$Total)
+leveneTest(Total~Pres, data = f)
+kruskal.test(Total~Pres, data = f )
+
+library(readxl)
+fs <- read_excel("Tannins_Zeller.xlsx", 
+    sheet = "Struct_R")
+View(fs)
+
+#mdp
+tapply(fs$mDP, INDEX = fs$Pres, FUN = mean)
+sd<- sd(fs$mDP)
+n<- length(fs$mDP)
+sem<- sd/sqrt(n)
+shapiro.test(fs$mDP)
+leveneTest(mDP~Pres, data = fs)
+kruskal.test(mDP~Pres, data = fs )
+
+#%PC
+tapply(fs$PC, INDEX = fs$Pres, FUN = mean)
+sd<- sd(fs$PC)
+n<- length(fs$PC)
+sem<- sd/sqrt(n)
+shapiro.test(fs$PC)
+leveneTest(PC~Pres, data = fs)
+kruskal.test(PC~Pres, data = fs )
+
+#%PD
+tapply(fs$PD, INDEX = fs$Pres, FUN = mean)
+sd<- sd(fs$PD)
+n<- length(fs$PD)
+sem<- sd/sqrt(n)
+shapiro.test(fs$PD)
+leveneTest(PD~Pres, data = fs)
+kruskal.test(PD~Pres, data = fs )
+
+#%cis
+tapply(fs$cis, INDEX = fs$Pres, FUN = mean)
+sd<- sd(fs$cis)
+n<- length(fs$cis)
+sem<- sd/sqrt(n)
+shapiro.test(fs$cis)
+leveneTest(cis~Pres, data = fs)
+kruskal.test(cis~Pres, data = fs )
+
+#%Trans
+tapply(fs$trans, INDEX = fs$Pres, FUN = mean)
+sd<- sd(fs$trans)
+n<- length(fs$trans)
+sem<- sd/sqrt(n)
+shapiro.test(fs$trans)
+leveneTest(trans~Pres, data = fs)
+kruskal.test(trans~Pres, data = fs )
+
+
+#Filter for BG
+bg<- fs %>% filter(Willow == "BG")
+
+# Calculate mean values grouped by Preservation method (Fresh vs Frozen)
+bg_summary <- bg %>%
+  group_by(Pres) %>%  # Assuming "Preservation" column contains "Fresh" or "Frozen"
+  summarise(
+    mDP = mean(mDP, na.rm = TRUE),
+    cis = mean(cis, na.rm = TRUE),
+    trans = mean(trans, na.rm = TRUE),
+    PC = mean(PC, na.rm = TRUE),
+    PD = mean(PD, na.rm = TRUE),
+    A_Type = mean(`%A-Type`, na.rm = TRUE)
+  ) %>%
+  pivot_longer(cols = -Pres, names_to = "Variable", values_to = "Mean") %>%
+  pivot_wider(names_from = Pres, values_from = Mean)
+
+# Compute overall SEM (across Fresh & Frozen combined)
+overall_sem <- bg %>%
+  summarise(
+    mDP = sd(mDP, na.rm = TRUE) / sqrt(n()),
+    cis = sd(cis, na.rm = TRUE) / sqrt(n()),
+    trans = sd(trans, na.rm = TRUE) / sqrt(n()),
+    PC = sd(PC, na.rm = TRUE) / sqrt(n()),
+    PD = sd(PD, na.rm = TRUE) / sqrt(n()),
+    A_Type = sd(`%A-Type`, na.rm = TRUE) / sqrt(n())
+  ) %>%
+  pivot_longer(cols = everything(), names_to = "Variable", values_to = "Overall_SEM")
+
+# Merge overall SEM with bg_summary
+bg_summary <- bg_summary %>%
+  left_join(overall_sem, by = "Variable")
+
+#mdp
+shapiro.test(bg$mDP)
+leveneTest(mDP~Pres, data = bg)
+kruskal.test(mDP~Pres, data = bg )
+#pc
+shapiro.test(bg$PC)
+leveneTest(PC~Pres, data = bg)
+pc<- aov(PC~Pres, data = bg)
+summary(pc)
+#PD
+shapiro.test(bg$PD)
+leveneTest(PD~Pres, data = bg)
+pd<- aov(PD~Pres, data = bg)
+summary(pd)
+#cis
+shapiro.test(bg$cis)
+leveneTest(cis~Pres, data = bg)
+cis<- aov(cis~Pres, data = bg)
+summary(cis)
+#trans
+shapiro.test(bg$trans)
+leveneTest(trans~Pres, data = bg)
+trans<- aov(trans~Pres, data = bg)
+summary(trans)
+#Atype
+shapiro.test(bg$`%A-Type`)
+leveneTest(`%A-Type`~Pres, data = bg)
+a<-aov(`%A-Type`~Pres, data = bg)
+summary(a)
+
+#Filter for tn
+tn<- fs %>% filter(Willow == "TN")
+
+# Calculate mean values grouped by Preservation method (Fresh vs Frozen)
+tn_summary <- tn %>%
+  group_by(Pres) %>%  # Assuming "Preservation" column contains "Fresh" or "Frozen"
+  summarise(
+    mDP = mean(mDP, na.rm = TRUE),
+    cis = mean(cis, na.rm = TRUE),
+    trans = mean(trans, na.rm = TRUE),
+    PC = mean(PC, na.rm = TRUE),
+    PD = mean(PD, na.rm = TRUE),
+    A_Type = mean(`%A-Type`, na.rm = TRUE)
+  ) %>%
+  pivot_longer(cols = -Pres, names_to = "Variable", values_to = "Mean") %>%
+  pivot_wider(names_from = Pres, values_from = Mean)
+
+# Compute overall SEM (across Fresh & Frozen combined)
+overall_sem <- tn %>%
+  summarise(
+    mDP = sd(mDP, na.rm = TRUE) / sqrt(n()),
+    cis = sd(cis, na.rm = TRUE) / sqrt(n()),
+    trans = sd(trans, na.rm = TRUE) / sqrt(n()),
+    PC = sd(PC, na.rm = TRUE) / sqrt(n()),
+    PD = sd(PD, na.rm = TRUE) / sqrt(n()),
+    A_Type = sd(`%A-Type`, na.rm = TRUE) / sqrt(n())
+  ) %>%
+  pivot_longer(cols = everything(), names_to = "Variable", values_to = "Overall_SEM")
+
+# Merge overall SEM with tn_summary
+tn_summary <- tn_summary %>%
+  left_join(overall_sem, by = "Variable")
+
+#mdp
+shapiro.test(tn$mDP)
+leveneTest(mDP~Pres, data = tn)
+kruskal.test(mDP~Pres, data = tn )
+#pc
+shapiro.test(tn$PC)
+leveneTest(PC~Pres, data = tn)
+kruskal.test(PC~Pres, data = tn )
+#PD
+shapiro.test(tn$PD)
+leveneTest(PD~Pres, data = tn)
+kruskal.test(PD~Pres, data = tn )
+#cis
+shapiro.test(tn$cis)
+leveneTest(cis~Pres, data = tn)
+cis<- aov(cis~Pres, data = tn)
+summary(cis)
+#trans
+shapiro.test(tn$trans)
+leveneTest(trans~Pres, data = tn)
+trans<- aov(trans~Pres, data = tn)
+summary(trans)
+#Atype
+shapiro.test(tn$`%A-Type`)
+leveneTest(`%A-Type`~Pres, data = tn)
+kruskal.test(`%A-Type`~Pres, data = tn )
+
+#CONTENT BG and TN fresh vs frozen
+#Filter for bg
+bg<- f %>% filter(Willow == "BG")
+
+# Calculate mean values grouped by Preservation method (Fresh vs Frozen)
+bg_summary <- bg %>%
+  group_by(Pres) %>%  # Assuming "Preservation" column contains "Fresh" or "Frozen"
+  summarise(
+    bound = mean(Bound, na.rm = TRUE),
+    unbound = mean(Unbound, na.rm = TRUE),
+    total = mean(Total, na.rm = TRUE)
+  ) %>%
+  pivot_longer(cols = -Pres, names_to = "Variable", values_to = "Mean") %>%
+  pivot_wider(names_from = Pres, values_from = Mean)
+
+# Compute overall SEM (across Fresh & Frozen combined)
+overall_sem <- bg %>%
+  summarise(
+    bound = sd(Bound, na.rm = TRUE) / sqrt(n()),
+    unbound = sd(Unbound, na.rm = TRUE) / sqrt(n()),
+    total = sd(Total, na.rm = TRUE) / sqrt(n())
+  ) %>%
+  pivot_longer(cols = everything(), names_to = "Variable", values_to = "Overall_SEM")
+
+# Merge overall SEM with tn_summary
+bg_summary <- bg_summary %>%
+  left_join(overall_sem, by = "Variable")
+
+#bound
+shapiro.test(bg$Bound)
+leveneTest(Bound~Pres, data = bg)
+bound<- aov(Bound~Pres, data = bg)
+summary(bound)
+#unbound
+shapiro.test(bg$Unbound)
+leveneTest(Unbound~Pres, data = bg)
+unbound<- aov(Unbound~Pres, data = bg )
+summary(unbound)
+#Total
+shapiro.test(bg$Total)
+leveneTest(Total~Pres, data = bg)
+total<- aov(Total~Pres, data = bg )
+summary(total)
+
+#Filter for tn
+tn<- f %>% filter(Willow == "TN")
+
+# Calculate mean values grouped by Preservation method (Fresh vs Frozen)
+tn_summary <- tn %>%
+  group_by(Pres) %>%  # Assuming "Preservation" column contains "Fresh" or "Frozen"
+  summarise(
+    bound = mean(Bound, na.rm = TRUE),
+    unbound = mean(Unbound, na.rm = TRUE),
+    total = mean(Total, na.rm = TRUE)
+  ) %>%
+  pivot_longer(cols = -Pres, names_to = "Variable", values_to = "Mean") %>%
+  pivot_wider(names_from = Pres, values_from = Mean)
+
+# Compute overall SEM (across Fresh & Frozen combined)
+overall_sem <- tn %>%
+  summarise(
+    bound = sd(Bound, na.rm = TRUE) / sqrt(n()),
+    unbound = sd(Unbound, na.rm = TRUE) / sqrt(n()),
+    total = sd(Total, na.rm = TRUE) / sqrt(n())
+  ) %>%
+  pivot_longer(cols = everything(), names_to = "Variable", values_to = "Overall_SEM")
+
+# Merge overall SEM with tn_summary
+tn_summary <- tn_summary %>%
+  left_join(overall_sem, by = "Variable")
+
+#bound
+shapiro.test(tn$Bound)
+leveneTest(Bound~Pres, data = tn)
+bound<-aov(Bound~Pres, data = tn )
+summary(bound)
+#unbound
+shapiro.test(tn$Unbound)
+leveneTest(Unbound~Pres, data = tn)
+kruskal.test(Unbound~Pres, data = tn)
+#Total
+shapiro.test(tn$Total)
+leveneTest(Total~Pres, data = tn)
+kruskal.test(Total~Pres, data = tn )
+
+```
+

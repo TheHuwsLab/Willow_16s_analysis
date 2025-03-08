@@ -1,0 +1,562 @@
+#Packages
+```{r}
+library(dplyr)
+library(phyloseq)
+library(vegan)
+library(openxlsx)
+library(tidyverse)
+library(emmeans)
+library(car)
+library(broom)
+library(ggsignif)
+library(glue)
+library(tibble)
+library(ggfortify)
+library(patchwork)
+library(VennDiagram)
+library(ggvenn)
+library(readxl)
+library("RColorBrewer")
+library("ggplot2")
+library("gplots")
+library("ggplot2")
+library("pheatmap")
+library("RColorBrewer")
+library("tibble")
+library("tidyverse")
+library("dplyr")
+library("openxlsx")
+library("AID")
+library("plotrix")
+library("UpSetR")
+
+# Install BiocManager if it's not already installed
+if (!requireNamespace("BiocManager", quietly = TRUE)) {
+    install.packages("BiocManager")
+}
+
+BiocManager::install("mixOmics")
+library(mixOmics)
+```
+#Load metab
+```{r}
+
+#For rumen concentration load corresponding data for metab
+library(readxl)
+metab <- read_excel("metab_rumen_conc.xlsx")
+View(metab)
+```
+#Long version of metab
+```{r}
+metablong <- metab %>%
+  pivot_longer(
+    cols = starts_with("m_"),  # Select columns starting with "m_"
+    names_to = "Metabolite",          # Name of the new column for metabolite
+    values_to = "Value"          # Name of the new column for values
+  )
+view(metablong)
+str(metablong)
+
+# Remove "m_" from the 'Metabolite' column
+metablong$Metabolite <- gsub("^m_", "", metablong$Metabolite)
+view(metablong)
+```
+#Load metabolite classification
+```{r}
+library(readxl)
+class <- read_excel("class.xlsx")
+View(class)
+
+# Joining metablong with class based on Metabolite column
+metablong <- metablong %>%
+  left_join(class, by = "Metabolite")
+
+# View the resulting data frame
+view(metablong)
+```
+#Averages of every metabolite
+```{r}
+# Calculate the average value for each combination of treatment and Metabolite
+average_treatment <- metablong %>%
+  group_by(Treatment,Metabolite) %>%
+  summarize(AverageValue = mean(Value, na.rm = TRUE)) %>%
+  ungroup()
+
+# View the resulting data frame
+view(average_treatment)
+write.table(average_treatment, file = "average_treatment.txt")
+
+# Calculate the average value for each combination of period and Metabolite
+average_period <- metablong %>%
+  group_by(Period,Metabolite) %>%
+  summarize(AverageValue = mean(Value, na.rm = TRUE)) %>%
+  ungroup()
+
+# View the resulting data frame
+view(average_period)
+write.table(average_period, file = "average_period.txt")
+
+# Calculate the average value for each combination of TP and Metabolite
+average_tp <- metablong %>%
+  group_by(TP,Metabolite) %>%
+  summarize(AverageValue = mean(Value, na.rm = TRUE)) %>%
+  ungroup()
+
+# View the resulting data frame
+view(average_tp)
+write.table(average_tp, file = "average_tp.txt")
+
+rm(average_treatment, average_period, average_tp)
+```
+#SEM of every metabolite
+```{r}
+# Calculate the standard error for each combination of Metabolite
+se_treat <- metablong %>%
+  group_by(Metabolite) %>%
+  summarize(
+    Count = n(),
+    StandardError = sd(Value, na.rm = TRUE) / sqrt(n())
+  ) %>%
+  ungroup()
+
+# View the resulting data frame
+view(se_treat)
+write.table(se_treat, file = "se_treat.txt")
+
+rm(se_treat)
+
+```
+#Shapiro and Levene test for every metabolite
+```{r}
+library(purrr)
+
+# Assuming your data frame is named metablong and has columns: Metabolite and Value
+
+# Perform Shapiro-Wilk test for each metabolite
+shapiro_results <- metablong %>%
+  group_by(Metabolite) %>%
+  summarize(
+    W_statistic = tryCatch(shapiro.test(Value)$statistic, error = function(e) NA),
+    p_value = tryCatch(shapiro.test(Value)$p.value, error = function(e) NA)
+  ) %>%
+  ungroup()
+
+# View the resulting data frame
+view(shapiro_results)
+write.table(shapiro_results, file = "shapiro_results.txt")
+
+# Perform Levene's test for each metabolite
+levene_results <- metablong %>%
+  group_by(Metabolite) %>%
+  summarize(
+    Test_Statistic = tryCatch(leveneTest(Value ~ Treatment)$`F value`[1], error = function(e) NA),
+    p_value = tryCatch(leveneTest(Value ~ Treatment)$`Pr(>F)`[1], error = function(e) NA)
+  ) %>%
+  ungroup()
+
+# View the resulting data frame
+print(levene_results)
+write.table(levene_results, file = "levene_results.txt")
+
+rm(shapiro_results, levene_results)
+```
+#Testing out the shapiro and levene of 3 metabolites
+```{r}
+shapiro.test(metab$`m_3-Hydroxyphenylacetate`)
+leveneTest(`m_3-Hydroxyphenylacetate`~Treatment, data = metab)
+kruskal.test(`m_3-Hydroxyphenylacetate`~Treatment, data = metab )
+kruskal.test(`m_3-Hydroxyphenylacetate`~Period, data = metab )
+kruskal.test(`m_3-Hydroxyphenylacetate`~TP, data = metab )
+
+kruskal.test(m_Succinate~Treatment, data = metab )
+kruskal.test(m_Succinate~Period, data = metab )
+kruskal.test(m_Succinate~TP, data = metab )
+
+#Works for Levene but not for ANOVA - need to ANOVA
+
+shapiro.test(metab$m_Isobutyrate)
+leveneTest(m_Isobutyrate~Treatment, data = metab)
+IB<- aov(m_Isobutyrate ~ Treatment*Period, data = metab)
+summary(IB)
+
+shapiro.test(metab$m_Tyrosine)
+leveneTest(m_Tyrosine ~ Treatment, data = metab)
+Tyr<- aov(m_Tyrosine ~ Treatment*Period, data = metab)
+summary(Tyr)
+```
+#How to select Metabolites that have a <0.05 shapiro and Perform Kruskal
+```{r}
+# Filter metabolites with p-value < 0.05
+significant_metabolites <- shapiro_results %>%
+  filter(p_value < 0.05) %>%
+  pull(Metabolite)  # Extract the list of significant metabolites
+
+#Perform Kruskal-Wallis test for each significant metabolite
+kruskal_results <- metablong %>%
+  filter(Metabolite %in% significant_metabolites) %>%
+  group_by(Metabolite) %>%
+  summarize(
+    KW_treatment = tryCatch(kruskal.test(Value ~ Treatment)$p.value, error = function(e) NA),
+    KW_period = tryCatch(kruskal.test(Value ~ Period)$p.value, error = function(e) NA),
+    KW_TP = tryCatch(kruskal.test(Value ~ TP)$p.value, error = function(e) NA)
+  ) %>%
+  ungroup()
+
+# View the resulting data frame
+print(kruskal_results)
+write.table(kruskal_results, file = "kruskal_results.txt")
+
+rm(significant_metabolites, kruskal_results)
+```
+#How to select Metabolites that have a >0.05 shapiro and Perform Anova
+```{r}
+# Filter metabolites with p-value < 0.05
+insignificant_metabolites <- shapiro_results %>%
+  filter(p_value > 0.05) %>%
+  pull(Metabolite)  # Extract the list of significant metabolites
+
+# Step 2: Perform ANOVA for each normal metabolite
+anova_results <- metablong %>%
+  filter(Metabolite %in% insignificant_metabolites) %>%
+  group_by(Metabolite) %>%
+  summarize(
+    ANOVA_Treatment = tryCatch(
+      summary(aov(Value ~ Treatment))[[1]]["Treatment", "Pr(>F)"],
+      error = function(e) NA
+    ),
+    ANOVA_Period = tryCatch(
+      summary(aov(Value ~ Period))[[1]]["Period", "Pr(>F)"],
+      error = function(e) NA
+    ),
+    ANOVA_TP = tryCatch(
+      summary(aov(Value ~ TP))[[1]]["TP", "Pr(>F)"],
+      error = function(e) NA
+    )
+  ) %>%
+  ungroup()
+
+# View the resulting data frame
+print(anova_results)
+write.table(anova_results, file = "anova_results.txt")
+
+#Need to manually do ANOVA
+
+```
+#Manual ANOVA
+```{r}
+shapiro.test(metab$`m_3-Phenylpropionate`)
+leveneTest(`m_3-Phenylpropionate`~Treatment, data = metab)
+pp3<- aov(`m_3-Phenylpropionate` ~ Treatment*Period, data = metab)
+summary(pp3)
+rm(pp3)
+
+shapiro.test(metab$m_Acetate)
+leveneTest(m_Acetate~Treatment, data = metab)
+a<- aov(m_Acetate ~ Treatment*Period, data = metab)
+summary(a)
+rm(a)
+
+shapiro.test(metab$m_Aspartate)
+leveneTest(m_Aspartate~Treatment, data = metab)
+asp<- aov(m_Aspartate ~ Treatment*Period, data = metab)
+summary(asp)
+rm(asp)
+
+shapiro.test(metab$m_Benzoate)
+leveneTest(m_Benzoate~Treatment, data = metab)
+B<- aov(m_Benzoate ~ Treatment*Period, data = metab)
+summary(B)
+rm(B)
+
+shapiro.test(metab$m_Butyrate)
+leveneTest(m_Butyrate~Treatment, data = metab)
+By<- aov(m_Butyrate ~ Treatment*Period, data = metab)
+summary(By)
+rm(By)
+
+shapiro.test(metab$m_Glutamate)
+leveneTest(m_Glutamate~Treatment, data = metab)
+g<- aov(m_Glutamate ~ Treatment*Period, data = metab)
+summary(g)
+rm(g)
+
+shapiro.test(metab$m_Isobutyrate)
+leveneTest(m_Isobutyrate~Treatment, data = metab)
+IB<- aov(m_Isobutyrate ~ Treatment*Period, data = metab)
+summary(IB)
+rm(IB)
+
+shapiro.test(metab$m_Lactose)
+leveneTest(m_Lactose~Treatment, data = metab)
+l<- aov(m_Lactose ~ Treatment*Period, data = metab)
+summary(l)
+rm(l)
+
+shapiro.test(metab$`m_N-Phenylacetylglycine`)
+leveneTest(`m_N-Phenylacetylglycine`~Treatment, data = metab)
+nP<- aov(`m_N-Phenylacetylglycine` ~ Treatment*Period, data = metab)
+summary(nP)
+rm(nP)
+
+shapiro.test(metab$m_Propionate)
+leveneTest(m_Propionate~Treatment, data = metab)
+pp<- aov(m_Propionate ~ Treatment*Period, data = metab)
+summary(pp)
+rm(pp)
+
+shapiro.test(metab$m_Tyrosine)
+leveneTest(m_Tyrosine ~ Treatment, data = metab)
+Tyr<- aov(m_Tyrosine ~ Treatment*Period, data = metab)
+summary(Tyr)
+rm(Tyr)
+```
+#Heatmap
+```{r}
+library(dplyr)
+library(tidyr)
+library(pheatmap)
+
+# Prepare the data for the heatmap
+heatmap_data <- metablong %>%
+  group_by(Metabolite, Treatment) %>%
+  summarize(Average_Value = mean(Value, na.rm = TRUE)) %>%
+  pivot_wider(names_from = Treatment, values_from = Average_Value, values_fill = list(Average_Value = 0))
+
+# Convert to matrix for heatmap
+heatmap_matrix <- as.matrix(heatmap_data %>% dplyr::select(-Metabolite) %>% column_to_rownames("Metabolite"))
+
+# Generate the heatmap
+pheatmap(
+  heatmap_matrix,
+  cluster_rows = TRUE,    # Cluster metabolites (rows)
+  cluster_cols = TRUE,    # Cluster treatments (columns)
+  scale = "row",          # Scale values across rows (metabolites)
+  color = colorRampPalette(c("blue", "white", "red"))(50),  # Color gradient from blue to red
+  main = "Heatmap of Metabolite Functionality by Treatment",
+  filename = "heatmap_treatment.png"
+)
+
+```
+#Heatmap with metabolism
+```{r}
+set.seed(123)
+
+library(pheatmap)
+library(dplyr)
+library(tidyr)
+
+# Ensure all values are numeric and handle non-numeric data
+metablong <- metablong %>%
+  mutate(Value = as.numeric(Value)) %>%
+  filter(!is.na(Value))
+
+# Ensure there are no conflicts with the summarize function
+heatmap_data <- metablong %>%
+  dplyr::group_by(Metabolite, Treatment) %>%
+  dplyr::summarize(Average_Value = mean(Value, na.rm = TRUE), .groups = 'drop') %>%
+  tidyr::pivot_wider(names_from = Treatment, values_from = Average_Value, values_fill = list(Average_Value = 0))
+
+# Include MetabolismGroup information
+heatmap_data <- heatmap_data %>%
+  left_join(metablong %>% dplyr::select(Metabolite, Metabolism) %>% distinct(), by = "Metabolite")
+
+# Convert to matrix for heatmap
+heatmap_matrix <- as.matrix(heatmap_data %>% dplyr::select(-Metabolite, -Metabolism))
+rownames(heatmap_matrix) <- heatmap_data$Metabolite
+
+# Create a data frame for the row annotations
+annotation_df <- data.frame(Metabolism = heatmap_data$Metabolism)
+rownames(annotation_df) <- heatmap_data$Metabolite
+
+# Define colors for metabolism groups if needed
+unique_groups <- unique(heatmap_data$Metabolism)
+annotation_colors <- list(Metabolism = setNames(RColorBrewer::brewer.pal(length(unique_groups), "Set3"), unique_groups))
+
+# Reorder columns of heatmap_matrix to SIL, BG, TN
+heatmap_matrix <- heatmap_matrix[, c("SIL", "BG", "TN")]
+
+# Generate the heatmap with annotations
+heatmap_grob<- pheatmap(
+  heatmap_matrix,
+  cluster_rows = TRUE,    # Cluster metabolites (rows)
+  cluster_cols = FALSE,    # Cluster treatments (columns)
+  scale = "row",          # Scale values across rows (metabolites)
+  color = colorRampPalette(c("blue", "white", "red"))(50),  # Color gradient from blue to red,
+  annotation_row = annotation_df,   # Row annotations for metabolism group
+  annotation_colors = annotation_colors, # Colors for metabolism group annotations
+  clustering_method = "average",
+  clustering_distance_rows = "euclidean",
+    treeheight_row = 10, # Adjust the height of the row dendrogram
+  treeheight_col = 10,  # Adjust the height of the column dendrogram
+   cellheight = 10,    # Increase to make cells taller
+  cellwidth = 50,     # Increase to make cells wider
+   )$gtable
+
+heatmap_plot<- ggdraw(heatmap_grob)
+heatmap_plot
+
+
+```
+#Load CSV for Metabolomic Exploratory analysis
+```{r}
+#Rumen concentration Metabolomics
+library(readr)
+rumen <- read_csv("rumen_metabolomics_conc.csv")
+View(rumen)
+
+```
+#MIXOMICS PCA, PLSDA and OPLSDA
+```{r}
+library(mixOmics)
+library(grid)
+library(cowplot)
+library(patchwork)
+install.packages("magick")
+library(magick)
+
+
+#Removing meta data columns from rumen
+rumen_data <- rumen[, -c(2:4)]
+
+#Assigning Treatment for PCA
+treatment <- rumen$Treatment
+treatment <- rumen[[2]]
+# Assuming you've extracted the 'Treatment' column correctly
+treatment <- as.factor(treatment)
+
+
+# Define colors for the legend
+colors <- c("BG" = "darkgreen","SIL" = "blue",  "TN" = "grey")
+
+# Convert the data frame to a matrix
+rumen_matrix <- as.matrix(rumen_data)
+
+#PCA results
+pca_result <- pca(rumen_matrix, ncomp = 2)  # ncomp specifies the number of components to calculate
+# Plot PCA
+png("PCA_plot.png", width = 1800, height = 1200, res = 300)
+plotIndiv(pca_result, group = treatment, legend = FALSE, title = "(a)",
+          ellipse = TRUE, col.per.group = colors, pch = 19, legend.title = "Feed   Treatment")
+dev.off()
+pca_plot_grid<- ggdraw() + draw_image("PCA_plot.png")
+pca_plot_grid
+
+#PCA combined plot
+pca_plot<- plotIndiv(pca_result, group = treatment, legend = TRUE, title = "(a)",ellipse = TRUE, col.per.group = colors, pch = 19, legend.title = "Feed   Treatment")
+pca_plot
+
+
+# PLS-DA
+plsda_result <- plsda(rumen_matrix, treatment, ncomp = 2)
+png("PLSDA_plot.png", width = 1800, height = 1200, res = 300)
+plotIndiv(plsda_result, group = treatment, legend = FALSE, title = "(b)",
+          ellipse = TRUE,col.per.group = colors, pch = 19, legend.title = "Feed   Treatment")
+dev.off()
+plsda_plot_grid<- ggdraw() + draw_image("PLSDA_plot.png")
+plsda_plot_grid
+
+#PLSDA combined plot
+plsda_plot<- plotIndiv(plsda_result, group = treatment, legend = TRUE, title = "(b)",
+          ellipse = TRUE,col.per.group = colors, pch = 19, legend.title = "Feed   Treatment")
+plsda_plot
+
+#Save combined plot
+# Combine PCA and PLS-DA with a shared legend
+upper_row<- (pca_plot_grid + plsda_plot_grid) + plot_layout(guides = "collect")
+upper_row
+
+# OPLS-DA (using splsda for implementation)
+oplsda_result <- splsda(rumen_matrix, treatment, ncomp = 2)
+png("OPLSDA_plot.png", width = 1800, height = 1200, res = 300)
+plotIndiv(oplsda_result, group = treatment, legend = TRUE, title = "OPLS-DA Plot",
+          ellipse = TRUE, col.per.group = colors, pch = 19, legend.title = "Feed   Treatment")
+dev.off()
+
+rm(pca_result, plsda_result, oplsda_result, rumen_data, rumen_matrix,
+   treatment, colors)
+```
+#Combine PCA, PLSDA and Metabolites
+```{r}
+# Combine the upper row with the heatmap below
+combined_plot <- (upper_row / heatmap_plot) + plot_layout(nrow = 2)
+combined_plot
+
+# Save the combined plot
+ggsave("Metab_combined_plot.png", plot = combined_plot, width = 17, height = 24, units = "cm", dpi = 600)
+```
+
+#Correlation of metabolites
+```{r}
+#Test parametric / non parametric
+
+shapiro.test(rumen$`3-Hydroxyphenylacetate`)
+shapiro.test(rumen$Gentisate)
+
+#therefore use spearman correlation
+
+#Remove column 1-4 of rumen data
+rumen_corr<- rumen[,-c(1:4)]
+
+# Compute the Pearson correlation matrix using pairwise complete observations
+correlation_matrix <- cor(rumen_corr, use = "pairwise.complete.obs", method = "spearman")
+
+#Round data to two digits
+correlation_matrix<- round(correlation_matrix, digits = 2)
+
+# improved correlation matrix
+library(corrplot)
+png("Rumen_metab_Spearman_Corr.png", width = 800, height = 600)
+corrplot((correlation_matrix),
+             method = "circle",
+             type = "upper", 
+             tl.cex = 1,        # Text label size
+             number.cex = 1.5,    # Correlation number size
+              mar = c(0,0, 0, 0)  # Margin adjustment
+         )
+dev.off()
+
+rm( rumen_corr, correlation_matrix)
+```
+#Significant corr plot
+```{r}
+library(Hmisc)
+
+#Remove column 1-4 of rumen data
+rumen_corr<- rumen[,-c(1:4)]
+
+# Calculate Spearman correlation matrix and p-values
+correlation_result <- rcorr(as.matrix(rumen_corr), type = "spearman")
+
+# Extract correlation matrix and p-value matrix
+correlation_matrix <- correlation_result$r
+p_value_matrix <- correlation_result$P
+
+# Set significance level
+significance_level <- 0.05
+
+# Create a mask for significant correlations
+significant_mask <- p_value_matrix < significance_level
+
+# Set non-significant correlations to NA
+correlation_matrix[!significant_mask] <- NA
+
+# Plot the correlation matrix with significant correlations only
+png("Rumen_metab_Spearman_Corr_SIG.png", width = 800, height = 600)
+corrplot(correlation_matrix,
+         method = "circle",
+         type = "upper",
+         tl.cex = 1,        # Text label size
+         number.cex = 1.5,  # Correlation number size
+         mar = c(0, 0, 0, 0),  # Margin adjustment
+         na.label = " ",   # Remove non-significant values
+         na.label.col = "white"  # Color for non-significant values
+)
+dev.off()
+
+rm(correlation_matrix, correlation_result, rumen_corr, significant_mask, 
+   significance_level, p_value_matrix)
+```
+
+
+
+

@@ -1,0 +1,1412 @@
+#Loading packages
+```{r}
+library(tidyverse)
+library(dplyr)
+install.packages("dplR")
+install.packages("dplyr")
+library(readxl)
+library(ggplot2)
+library(GGally)
+library(rstatix) # shapiro test by group
+library(patchwork) # multi figures
+library(knitr); library(kableExtra); library(broom); library(ggfortify); library(see)
+library(performance);library(car); library(calibrate)
+library(leaps) # best subset selection 
+library(Hmisc); library(ggpubr); library(corrr); library(ggcorrplot) # correlations
+library(ggridges) # distribution plots
+library(ggeasy) # add easy titles
+library(pastecs) # nice summary of descriptive statistics
+library(data.table)
+install.packages("plotrix")
+install.packages("AID")
+library(AID)
+library(plotrix)
+library(ggsignif)
+install.packages("multcomp")
+library(multcomp)
+```
+#Loading data
+```{r}
+library(readxl)
+ferm <- read_excel("Summary_s77_R.xlsx", 
+    sheet = "fermentation", col_types = c("text", 
+        "text", "text", "text", "numeric", 
+        "numeric", "numeric", "numeric", 
+        "numeric", "numeric", "numeric", 
+        "numeric", "numeric", "numeric", 
+        "numeric", "numeric", "numeric", 
+        "numeric", "numeric", "numeric", 
+        "numeric", "text", "text", "text", 
+        "text", "numeric", "numeric", "numeric", 
+        "numeric", "numeric", "numeric", 
+        "numeric", "numeric", "numeric", 
+        "numeric", "numeric", "numeric", 
+        "numeric", "numeric", "numeric", 
+        "numeric", "numeric", "numeric", 
+        "numeric", "numeric", "numeric", 
+        "numeric", "numeric", "numeric", 
+        "numeric", "numeric", "numeric", 
+        "numeric", "text", "text", "text", 
+        "text", "numeric", "numeric", "numeric", 
+        "numeric", "numeric", "numeric", 
+        "numeric", "numeric","numeric", "numeric"))
+View(ferm)
+```
+#Average and SEM of Liveweight
+```{r}
+tapply(ferm$LW, INDEX = ferm$Treatment1, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$LW, INDEX = ferm$Period1, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$LW[ferm$Period1 == '1'], INDEX = ferm$Treatment1[ferm$Period1 == '1'], FUN = mean,na.rm = TRUE)
+tapply(ferm$LW[ferm$Period1 == '2'], INDEX = ferm$Treatment1[ferm$Period1 == '2'], FUN = mean,na.rm = TRUE)
+tapply(ferm$LW[ferm$Period1 == '3'], INDEX = ferm$Treatment1[ferm$Period1 == '3'], FUN = mean, na.rm = TRUE)
+
+std.error(ferm$LW, na.rm = TRUE)
+
+shapiro.test(ferm$LW)
+leveneTest(LW~Treatment1, data = ferm)
+LW<- aov(LW ~ Treatment1*Period1, data = ferm)
+summary(LW)
+pairwise.t.test(d$LW, d$Period, p.adjust.method = "BH")
+```
+#Average and SEM of Liveweightgain
+```{r}
+tapply(ferm$DLWGg, INDEX = ferm$Treatment1, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$DLWGg, INDEX = ferm$Period1, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$DLWGg[ferm$Period1 == '1'], INDEX = ferm$Treatment1[ferm$Period1 == '1'], FUN = mean,na.rm = TRUE)
+tapply(ferm$DLWGg[ferm$Period1 == '2'], INDEX = ferm$Treatment1[ferm$Period1 == '2'], FUN = mean,na.rm = TRUE)
+tapply(ferm$DLWGg[ferm$Period1 == '3'], INDEX = ferm$Treatment1[ferm$Period1 == '3'], FUN = mean, na.rm = TRUE)
+
+std.error(ferm$DLWGg, na.rm = TRUE)
+
+shapiro.test(ferm$DLWGg)
+leveneTest(DLWGg~Treatment1, data = ferm)
+kruskal.test(DLWGg~Treatment1, data = ferm )
+kruskal.test(DLWGg~Period1, data = ferm )
+kruskal.test(DLWGg~TP1, data = ferm )
+pairwise.t.test(ferm$DLWGg, ferm$Treatment1, p.adjust.method = "BH")
+pairwise.t.test(ferm$DLWGg, ferm$TP1, p.adjust.method = "BH")
+```
+#Average and SEM of FDMI
+```{r}
+tapply(ferm$FDMI, INDEX = ferm$Treatment, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$FDMI, INDEX = ferm$Period, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$FDMI[ferm$Period == '1'], INDEX = ferm$Treatment[ferm$Period == '1'], FUN = mean,na.rm = TRUE)
+tapply(ferm$FDMI[ferm$Period == '2'], INDEX = ferm$Treatment[ferm$Period == '2'], FUN = mean,na.rm = TRUE)
+tapply(ferm$FDMI[ferm$Period == '3'], INDEX = ferm$Treatment[ferm$Period == '3'], FUN = mean, na.rm = TRUE)
+
+std.error(ferm$FDMI, na.rm = TRUE)
+
+shapiro.test(ferm$FDMI)
+leveneTest(FDMI~Treatment, data = ferm)
+kruskal.test(FDMI~Treatment, data = ferm )
+kruskal.test(FDMI~Period, data = ferm )
+kruskal.test(FDMI~TP, data = ferm )
+pairwise.t.test(ferm$FDMI, ferm$Treatment, p.adjust.method = "BH")
+pairwise.t.test(ferm$FDMI, ferm$Period, p.adjust.method = "BH")
+pairwise.t.test(ferm$FDMI, ferm$TP, p.adjust.method = "BH")
+```
+#Average and SEM of CDMI
+```{r}
+tapply(ferm$CDMI, INDEX = ferm$Treatment, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$CDMI, INDEX = ferm$Period, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$CDMI[ferm$Period == '1'], INDEX = ferm$Treatment[ferm$Period == '1'], FUN = mean,na.rm = TRUE)
+tapply(ferm$CDMI[ferm$Period == '2'], INDEX = ferm$Treatment[ferm$Period == '2'], FUN = mean,na.rm = TRUE)
+tapply(ferm$CDMI[ferm$Period == '3'], INDEX = ferm$Treatment[ferm$Period == '3'], FUN = mean, na.rm = TRUE)
+
+std.error(ferm$CDMI, na.rm = TRUE)
+
+shapiro.test(ferm$CDMI)
+leveneTest(CDMI~Treatment, data = ferm)
+kruskal.test(CDMI~Treatment, data = ferm )
+kruskal.test(CDMI~Period, data = ferm )
+kruskal.test(CDMI~TP, data = ferm )
+pairwise.t.test(ferm$CDMI, ferm$Treatment, p.adjust.method = "BH")
+pairwise.t.test(ferm$CDMI, ferm$Period, p.adjust.method = "BH")
+pairwise.t.test(ferm$CDMI, ferm$TP, p.adjust.method = "BH")
+```
+#Average and SEM of TDMI
+```{r}
+tapply(ferm$DMI, INDEX = ferm$Treatment, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$DMI, INDEX = ferm$Period, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$DMI[ferm$Period == '1'], INDEX = ferm$Treatment[ferm$Period == '1'], FUN = mean,na.rm = TRUE)
+tapply(ferm$DMI[ferm$Period == '2'], INDEX = ferm$Treatment[ferm$Period == '2'], FUN = mean,na.rm = TRUE)
+tapply(ferm$DMI[ferm$Period == '3'], INDEX = ferm$Treatment[ferm$Period == '3'], FUN = mean, na.rm = TRUE)
+
+std.error(ferm$DMI, na.rm = TRUE)
+
+shapiro.test(ferm$DMI)
+leveneTest(DMI~Treatment, data = ferm)
+kruskal.test(DMI~Treatment, data = ferm )
+kruskal.test(DMI~Period, data = ferm )
+kruskal.test(DMI~TP, data = ferm )
+pairwise.t.test(ferm$DMI, ferm$Treatment, p.adjust.method = "BH")
+pairwise.t.test(ferm$DMI, ferm$Period, p.adjust.method = "BH")
+pairwise.t.test(ferm$DMI, ferm$TP, p.adjust.method = "BH")
+```
+#Average and SEM OMI
+```{r}
+tapply(ferm$OMI, INDEX = ferm$Treatment, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$OMI, INDEX = ferm$Period, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$OMI[ferm$Period == '1'], INDEX = ferm$Treatment[ferm$Period == '1'], FUN = mean,na.rm = TRUE)
+tapply(ferm$OMI[ferm$Period == '2'], INDEX = ferm$Treatment[ferm$Period == '2'], FUN = mean,na.rm = TRUE)
+tapply(ferm$OMI[ferm$Period == '3'], INDEX = ferm$Treatment[ferm$Period == '3'], FUN = mean, na.rm = TRUE)
+
+std.error(ferm$OMI, na.rm = TRUE)
+
+shapiro.test(ferm$OMI)
+leveneTest(OMI~Treatment, data = ferm)
+kruskal.test(OMI~Treatment, data = ferm )
+kruskal.test(OMI~Period, data = ferm )
+kruskal.test(OMI~TP, data = ferm )
+pairwise.t.test(ferm$OMI, ferm$Treatment, p.adjust.method = "BH")
+pairwise.t.test(ferm$OMI, ferm$Period, p.adjust.method = "BH")
+pairwise.t.test(ferm$OMI, ferm$TP, p.adjust.method = "BH")
+```
+#Average and SEM of WI
+```{r}
+tapply(ferm$WI, INDEX = ferm$Treatment, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$WI, INDEX = ferm$Period, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$WI[ferm$Period == '1'], INDEX = ferm$Treatment[ferm$Period == '1'], FUN = mean,na.rm = TRUE)
+tapply(ferm$WI[ferm$Period == '2'], INDEX = ferm$Treatment[ferm$Period == '2'], FUN = mean,na.rm = TRUE)
+tapply(ferm$WI[ferm$Period == '3'], INDEX = ferm$Treatment[ferm$Period == '3'], FUN = mean, na.rm = TRUE)
+
+std.error(ferm$WI, na.rm = TRUE)
+
+shapiro.test(ferm$WI)
+leveneTest(WI~Treatment, data = ferm)
+kruskal.test(WI~Treatment, data = ferm )
+kruskal.test(WI~Period, data = ferm )
+kruskal.test(WI~TP, data = ferm )
+pairwise.t.test(ferm$WI, ferm$Treatment, p.adjust.method = "BH")
+pairwise.t.test(ferm$WI, ferm$Period, p.adjust.method = "BH")
+pairwise.t.test(ferm$WI, ferm$TP, p.adjust.method = "BH")
+```
+#Average and SEM of CTI
+```{r}
+tapply(ferm$CTI, INDEX = ferm$Treatment, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$CTI, INDEX = ferm$Period, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$CTI[ferm$Period == '1'], INDEX = ferm$Treatment[ferm$Period == '1'], FUN = mean,na.rm = TRUE)
+tapply(ferm$CTI[ferm$Period == '2'], INDEX = ferm$Treatment[ferm$Period == '2'], FUN = mean,na.rm = TRUE)
+tapply(ferm$CTI[ferm$Period == '3'], INDEX = ferm$Treatment[ferm$Period == '3'], FUN = mean, na.rm = TRUE)
+
+std.error(ferm$CTI, na.rm = TRUE)
+sd<- sd(ferm$CTI)
+n<- length(ferm$CTI)
+sem<- sd/sqrt(n)
+
+shapiro.test(ferm$CTI)
+leveneTest(CTI~Treatment, data = ferm)
+kruskal.test(CTI~Treatment, data = ferm )
+kruskal.test(CTI~Period, data = ferm )
+kruskal.test(CTI~TP, data = ferm )
+pairwise.t.test(ferm$CTI, ferm$Treatment, p.adjust.method = "BH")
+pairwise.t.test(ferm$CTI, ferm$Period, p.adjust.method = "BH")
+pairwise.t.test(ferm$CTI, ferm$TP, p.adjust.method = "BH")
+```
+#Average and SEM of TPI
+```{r}
+tapply(ferm$TPI, INDEX = ferm$Treatment, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$TPI, INDEX = ferm$Period, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$TPI[ferm$Period == '1'], INDEX = ferm$Treatment[ferm$Period == '1'], FUN = mean,na.rm = TRUE)
+tapply(ferm$TPI[ferm$Period == '2'], INDEX = ferm$Treatment[ferm$Period == '2'], FUN = mean,na.rm = TRUE)
+tapply(ferm$TPI[ferm$Period == '3'], INDEX = ferm$Treatment[ferm$Period == '3'], FUN = mean, na.rm = TRUE)
+
+std.error(ferm$TPI, na.rm = TRUE)
+
+shapiro.test(ferm$TPI)
+leveneTest(TPI~Treatment, data = ferm)
+kruskal.test(TPI~Treatment, data = ferm )
+kruskal.test(TPI~Period, data = ferm )
+kruskal.test(TPI~TP, data = ferm )
+pairwise.t.test(ferm$TPI, ferm$Treatment, p.adjust.method = "BH")
+pairwise.t.test(ferm$TPI, ferm$Period, p.adjust.method = "BH")
+pairwise.t.test(ferm$TPI, ferm$TP, p.adjust.method = "BH")
+```
+#Average and SEM of TAI
+```{r}
+tapply(ferm$TAI, INDEX = ferm$Treatment, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$TAI, INDEX = ferm$Period, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$TAI[ferm$Period == '1'], INDEX = ferm$Treatment[ferm$Period == '1'], FUN = mean,na.rm = TRUE)
+tapply(ferm$TAI[ferm$Period == '2'], INDEX = ferm$Treatment[ferm$Period == '2'], FUN = mean,na.rm = TRUE)
+tapply(ferm$TAI[ferm$Period == '3'], INDEX = ferm$Treatment[ferm$Period == '3'], FUN = mean, na.rm = TRUE)
+
+std.error(ferm$TAI, na.rm = TRUE)
+
+shapiro.test(ferm$TAI)
+leveneTest(TAI~Treatment, data = ferm)
+kruskal.test(TAI~Treatment, data = ferm )
+kruskal.test(TAI~Period, data = ferm )
+kruskal.test(TAI~TP, data = ferm )
+pairwise.t.test(ferm$TAI, ferm$Treatment, p.adjust.method = "BH")
+pairwise.t.test(ferm$TAI, ferm$Period, p.adjust.method = "BH")
+pairwise.t.test(ferm$TAI, ferm$TP, p.adjust.method = "BH")
+```
+#Average and sem of RDAI
+```{r}
+tapply(ferm$RDAI, INDEX = ferm$Treatment, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$RDAI, INDEX = ferm$Period, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$RDAI[ferm$Period == '1'], INDEX = ferm$Treatment[ferm$Period == '1'], FUN = mean,na.rm = TRUE)
+tapply(ferm$RDAI[ferm$Period == '2'], INDEX = ferm$Treatment[ferm$Period == '2'], FUN = mean,na.rm = TRUE)
+tapply(ferm$RDAI[ferm$Period == '3'], INDEX = ferm$Treatment[ferm$Period == '3'], FUN = mean, na.rm = TRUE)
+
+std.error(ferm$RDAI, na.rm = TRUE)
+
+shapiro.test(ferm$RDAI)
+leveneTest(RDAI~Treatment, data = ferm)
+kruskal.test(RDAI~Treatment, data = ferm )
+kruskal.test(RDAI~Period, data = ferm )
+kruskal.test(RDAI~TP, data = ferm )
+pairwise.t.test(ferm$RDAI, ferm$Treatment, p.adjust.method = "BH")
+pairwise.t.test(ferm$RDAI, ferm$Period, p.adjust.method = "BH")
+pairwise.t.test(ferm$RDAI, ferm$TP, p.adjust.method = "BH")
+```
+#Average and SEM of PropCT
+```{r}
+tapply(ferm$PropCT, INDEX = ferm$Treatment, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$PropCT, INDEX = ferm$Period, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$PropCT[ferm$Period == '1'], INDEX = ferm$Treatment[ferm$Period == '1'], FUN = mean,na.rm = TRUE)
+tapply(ferm$PropCT[ferm$Period == '2'], INDEX = ferm$Treatment[ferm$Period == '2'], FUN = mean,na.rm = TRUE)
+tapply(ferm$PropCT[ferm$Period == '3'], INDEX = ferm$Treatment[ferm$Period == '3'], FUN = mean, na.rm = TRUE)
+
+std.error(ferm$PropCT, na.rm = TRUE)
+sd<- sd(ferm$PropCT)
+n<- length(ferm$PropCT)
+sem<- sd/sqrt(n)
+
+shapiro.test(ferm$PropCT)
+leveneTest(PropCT~Treatment, data = ferm)
+kruskal.test(PropCT~Treatment, data = ferm )
+kruskal.test(PropCT~Period, data = ferm )
+kruskal.test(PropCT~TP, data = ferm )
+pairwise.t.test(ferm$PropCT, ferm$Treatment, p.adjust.method = "BH")
+pairwise.t.test(ferm$PropCT, ferm$Period, p.adjust.method = "BH")
+pairwise.t.test(ferm$PropCT, ferm$TP, p.adjust.method = "BH")
+```
+#Average and SEM GEI
+```{r}
+tapply(ferm$GEI, INDEX = ferm$Treatment, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$GEI, INDEX = ferm$Period, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$GEI[ferm$Period == '1'], INDEX = ferm$Treatment[ferm$Period == '1'], FUN = mean,na.rm = TRUE)
+tapply(ferm$GEI[ferm$Period == '2'], INDEX = ferm$Treatment[ferm$Period == '2'], FUN = mean,na.rm = TRUE)
+tapply(ferm$GEI[ferm$Period == '3'], INDEX = ferm$Treatment[ferm$Period == '3'], FUN = mean, na.rm = TRUE)
+
+std.error(ferm$GEI, na.rm = TRUE)
+
+shapiro.test(ferm$GEI)
+leveneTest(GEI~Treatment, data = ferm)
+kruskal.test(GEI~Treatment, data = ferm )
+kruskal.test(GEI~Period, data = ferm )
+kruskal.test(GEI~TP, data = ferm )
+pairwise.t.test(ferm$GEI, ferm$Treatment, p.adjust.method = "BH")
+pairwise.t.test(ferm$GEI, ferm$Period, p.adjust.method = "BH")
+pairwise.t.test(ferm$GEI, ferm$TP, p.adjust.method = "BH")
+```
+#Average and SEM of MEI
+```{r}
+tapply(ferm$MEI, INDEX = ferm$Treatment, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$MEI, INDEX = ferm$Period, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$MEI[ferm$Period == '1'], INDEX = ferm$Treatment[ferm$Period == '1'], FUN = mean,na.rm = TRUE)
+tapply(ferm$MEI[ferm$Period == '2'], INDEX = ferm$Treatment[ferm$Period == '2'], FUN = mean,na.rm = TRUE)
+tapply(ferm$MEI[ferm$Period == '3'], INDEX = ferm$Treatment[ferm$Period == '3'], FUN = mean, na.rm = TRUE)
+
+std.error(ferm$MEI, na.rm = TRUE)
+
+shapiro.test(ferm$MEI)
+leveneTest(MEI~Treatment, data = ferm)
+kruskal.test(MEI~Treatment, data = ferm )
+kruskal.test(MEI~Period, data = ferm )
+kruskal.test(MEI~TP, data = ferm )
+pairwise.t.test(ferm$MEI, ferm$Treatment, p.adjust.method = "BH")
+pairwise.t.test(ferm$MEI, ferm$Period, p.adjust.method = "BH")
+pairwise.t.test(ferm$MEI, ferm$TP, p.adjust.method = "BH")
+```
+#Average abd SEM of ADFI
+```{r}
+tapply(ferm$ADFI, INDEX = ferm$Treatment, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$ADFI, INDEX = ferm$Period, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$ADFI[ferm$Period == '1'], INDEX = ferm$Treatment[ferm$Period == '1'], FUN = mean,na.rm = TRUE)
+tapply(ferm$ADFI[ferm$Period == '2'], INDEX = ferm$Treatment[ferm$Period == '2'], FUN = mean,na.rm = TRUE)
+tapply(ferm$ADFI[ferm$Period == '3'], INDEX = ferm$Treatment[ferm$Period == '3'], FUN = mean, na.rm = TRUE)
+
+std.error(ferm$ADFI, na.rm = TRUE)
+
+shapiro.test(ferm$ADFI)
+leveneTest(ADFI~Treatment, data = ferm)
+kruskal.test(ADFI~Treatment, data = ferm )
+kruskal.test(ADFI~Period, data = ferm )
+kruskal.test(ADFI~TP, data = ferm )
+pairwise.t.test(ferm$ADFI, ferm$Treatment, p.adjust.method = "BH")
+pairwise.t.test(ferm$ADFI, ferm$Period, p.adjust.method = "BH")
+pairwise.t.test(ferm$ADFI, ferm$TP, p.adjust.method = "BH")
+```
+#Average and SEM of NDFI  
+```{r}
+tapply(ferm$NDFI, INDEX = ferm$Treatment, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$NDFI, INDEX = ferm$Period, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$NDFI[ferm$Period == '1'], INDEX = ferm$Treatment[ferm$Period == '1'], FUN = mean,na.rm = TRUE)
+tapply(ferm$NDFI[ferm$Period == '2'], INDEX = ferm$Treatment[ferm$Period == '2'], FUN = mean,na.rm = TRUE)
+tapply(ferm$NDFI[ferm$Period == '3'], INDEX = ferm$Treatment[ferm$Period == '3'], FUN = mean, na.rm = TRUE)
+
+std.error(ferm$NDFI, na.rm = TRUE)
+
+shapiro.test(ferm$NDFI)
+leveneTest(NDFI~Treatment, data = ferm)
+kruskal.test(NDFI~Treatment, data = ferm )
+kruskal.test(NDFI~Period, data = ferm )
+kruskal.test(NDFI~TP, data = ferm )
+pairwise.t.test(ferm$NDFI, ferm$Treatment, p.adjust.method = "BH")
+pairwise.t.test(ferm$NDFI, ferm$Period, p.adjust.method = "BH")
+pairwise.t.test(ferm$NDFI, ferm$TP, p.adjust.method = "BH")
+```
+#Average and SEM SI
+```{r}
+tapply(ferm$SI, INDEX = ferm$Treatment, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$SI, INDEX = ferm$Period, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$SI[ferm$Period == '1'], INDEX = ferm$Treatment[ferm$Period == '1'], FUN = mean,na.rm = TRUE)
+tapply(ferm$SI[ferm$Period == '2'], INDEX = ferm$Treatment[ferm$Period == '2'], FUN = mean,na.rm = TRUE)
+tapply(ferm$SI[ferm$Period == '3'], INDEX = ferm$Treatment[ferm$Period == '3'], FUN = mean, na.rm = TRUE)
+
+std.error(ferm$SI, na.rm = TRUE)
+
+shapiro.test(ferm$SI)
+leveneTest(SI~Treatment, data = ferm)
+kruskal.test(SI~Treatment, data = ferm )
+kruskal.test(SI~Period, data = ferm )
+kruskal.test(SI~TP, data = ferm )
+pairwise.t.test(ferm$SI, ferm$Treatment, p.adjust.method = "BH")
+pairwise.t.test(ferm$SI, ferm$Period, p.adjust.method = "BH")
+pairwise.t.test(ferm$SI, ferm$TP, p.adjust.method = "BH")
+```
+#Average and SEM of NI
+```{r}
+tapply(ferm$NI, INDEX = ferm$Treatment, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$NI, INDEX = ferm$Period, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$NI[ferm$Period == '1'], INDEX = ferm$Treatment[ferm$Period == '1'], FUN = mean,na.rm = TRUE)
+tapply(ferm$NI[ferm$Period == '2'], INDEX = ferm$Treatment[ferm$Period == '2'], FUN = mean,na.rm = TRUE)
+tapply(ferm$NI[ferm$Period == '3'], INDEX = ferm$Treatment[ferm$Period == '3'], FUN = mean, na.rm = TRUE)
+
+std.error(ferm$NI, na.rm = TRUE)
+
+shapiro.test(ferm$NI)
+leveneTest(NI~Treatment, data = ferm)
+kruskal.test(NI~Treatment, data = ferm )
+kruskal.test(NI~Period, data = ferm )
+kruskal.test(NI~TP, data = ferm )
+pairwise.t.test(ferm$NI, ferm$Treatment, p.adjust.method = "BH")
+pairwise.t.test(ferm$NI, ferm$Period, p.adjust.method = "BH")
+pairwise.t.test(ferm$NI, ferm$TP, p.adjust.method = "BH")
+```
+
+#Average and SEM of CO2
+```{r}
+tapply(ferm$CO2g, INDEX = ferm$Treatment1, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$CO2g, INDEX = ferm$Period1, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$CO2g[ferm$Period1 == '1'], INDEX = ferm$Treatment1[ferm$Period1 == '1'], FUN = mean,na.rm = TRUE)
+tapply(ferm$CO2g[ferm$Period1 == '2'], INDEX = ferm$Treatment1[ferm$Period1 == '2'], FUN = mean,na.rm = TRUE)
+tapply(ferm$CO2g[ferm$Period1 == '3'], INDEX = ferm$Treatment1[ferm$Period1 == '3'], FUN = mean, na.rm = TRUE)
+
+std.error(ferm$CO2g, na.rm = TRUE)
+
+shapiro.test(ferm$CO2g)
+leveneTest(CO2g~Treatment1, data = ferm)
+CO2g<- aov(CO2g ~ Treatment1*Period1, data = ferm)
+summary(CO2g)
+```
+#Average and SEM of O2
+```{r}
+tapply(ferm$O2g, INDEX = ferm$Treatment1, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$O2g, INDEX = ferm$Period1, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$O2g[ferm$Period1 == '1'], INDEX = ferm$Treatment1[ferm$Period1 == '1'], FUN = mean,na.rm = TRUE)
+tapply(ferm$O2g[ferm$Period1 == '2'], INDEX = ferm$Treatment1[ferm$Period1 == '2'], FUN = mean,na.rm = TRUE)
+tapply(ferm$O2g[ferm$Period1 == '3'], INDEX = ferm$Treatment1[ferm$Period1 == '3'], FUN = mean, na.rm = TRUE)
+
+std.error(ferm$O2g, na.rm = TRUE)
+
+shapiro.test(ferm$O2g)
+leveneTest(O2g~Treatment1, data = ferm)
+O2g<- aov(O2g ~ Treatment1*Period1, data = ferm)
+summary(O2g)
+pairwise.t.test(ferm$O2g, ferm$Period1, p.adjust.method = "BH")
+```
+#Average and SEM of CH4
+```{r}
+tapply(ferm$CH4g, INDEX = ferm$Treatment1, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$CH4g, INDEX = ferm$Period1, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$CH4g[ferm$Period1 == '1'], INDEX = ferm$Treatment1[ferm$Period1 == '1'], FUN = mean,na.rm = TRUE)
+tapply(ferm$CH4g[ferm$Period1 == '2'], INDEX = ferm$Treatment1[ferm$Period1 == '2'], FUN = mean,na.rm = TRUE)
+tapply(ferm$CH4g[ferm$Period1 == '3'], INDEX = ferm$Treatment1[ferm$Period1 == '3'], FUN = mean, na.rm = TRUE)
+
+std.error(ferm$CH4g, na.rm = TRUE)
+
+shapiro.test(ferm$CH4g)
+leveneTest(CH4g~Treatment1, data = ferm)
+CH4g<- aov(CH4g ~ Treatment1*Period1, data = ferm)
+summary(CH4g)
+pairwise.t.test(ferm$CH4g, ferm$Period1, p.adjust.method = "BH")
+```
+#Average and SEM H2
+```{r}
+tapply(ferm$H2g, INDEX = ferm$Treatment1, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$H2g, INDEX = ferm$Period1, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$H2g[ferm$Period1 == '1'], INDEX = ferm$Treatment1[ferm$Period1 == '1'], FUN = mean,na.rm = TRUE)
+tapply(ferm$H2g[ferm$Period1 == '2'], INDEX = ferm$Treatment1[ferm$Period1 == '2'], FUN = mean,na.rm = TRUE)
+tapply(ferm$H2g[ferm$Period1 == '3'], INDEX = ferm$Treatment1[ferm$Period1 == '3'], FUN = mean, na.rm = TRUE)
+
+std.error(ferm$H2g, na.rm = TRUE)
+
+shapiro.test(ferm$H2g)
+leveneTest(H2g~Treatment1, data = ferm)
+kruskal.test(H2g~Treatment1, data = ferm )
+kruskal.test(H2g~Period1, data = ferm )
+kruskal.test(H2g~TP1, data = ferm )
+pairwise.t.test(ferm$H2g, ferm$Treatment1, p.adjust.method = "BH")
+pairwise.t.test(ferm$H2g, ferm$Period1, p.adjust.method = "BH")
+pairwise.t.test(ferm$H2g, ferm$TP1, p.adjust.method = "BH")
+```
+#Average and SEM of RQ
+```{r}
+tapply(ferm$RQ, INDEX = ferm$Treatment1, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$RQ, INDEX = ferm$Period1, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$RQ[ferm$Period1 == '1'], INDEX = ferm$Treatment1[ferm$Period1 == '1'], FUN = mean,na.rm = TRUE)
+tapply(ferm$RQ[ferm$Period1 == '2'], INDEX = ferm$Treatment1[ferm$Period1 == '2'], FUN = mean,na.rm = TRUE)
+tapply(ferm$RQ[ferm$Period1 == '3'], INDEX = ferm$Treatment1[ferm$Period1 == '3'], FUN = mean, na.rm = TRUE)
+
+std.error(ferm$RQ, na.rm = TRUE)
+
+shapiro.test(ferm$RQ)
+leveneTest(RQ~Treatment1, data = ferm)
+RQ <- aov(RQ~ Treatment1*Period1, data = ferm)
+summary(RQ)
+pairwise.t.test(ferm$RQ, ferm$Treatment1, p.adjust.method = "BH")
+pairwise.t.test(ferm$RQ, ferm$Period1, p.adjust.method = "BH")
+pairwise.t.test(ferm$RQ, ferm$TP1, p.adjust.method = "BH")
+```
+#Average and SEM of CH4-E
+```{r}
+tapply(ferm$CH4E, INDEX = ferm$Treatment1, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$CH4E, INDEX = ferm$Period1, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$CH4E[ferm$Period1 == '1'], INDEX = ferm$Treatment1[ferm$Period1 == '1'], FUN = mean,na.rm = TRUE)
+tapply(ferm$CH4E[ferm$Period1 == '2'], INDEX = ferm$Treatment1[ferm$Period1 == '2'], FUN = mean,na.rm = TRUE)
+tapply(ferm$CH4E[ferm$Period1 == '3'], INDEX = ferm$Treatment1[ferm$Period1 == '3'], FUN = mean, na.rm = TRUE)
+
+std.error(ferm$CH4E, na.rm = TRUE)
+
+shapiro.test(ferm$CH4E)
+leveneTest(CH4E~Treatment1, data = ferm)
+CH4E <- aov(CH4E~ Treatment1*Period1, data = ferm)
+summary(CH4E)
+pairwise.t.test(ferm$CH4E, ferm$Treatment1, p.adjust.method = "BH")
+pairwise.t.test(ferm$CH4E, ferm$Period1, p.adjust.method = "BH")
+pairwise.t.test(ferm$CH4E, ferm$TP1, p.adjust.method = "BH")
+```
+#Average and SEM of HPMJ
+```{r}
+tapply(ferm$HPMJ, INDEX = ferm$Treatment1, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$HPMJ, INDEX = ferm$Period1, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$HPMJ[ferm$Period1 == '1'], INDEX = ferm$Treatment1[ferm$Period1 == '1'], FUN = mean,na.rm = TRUE)
+tapply(ferm$HPMJ[ferm$Period1 == '2'], INDEX = ferm$Treatment1[ferm$Period1 == '2'], FUN = mean,na.rm = TRUE)
+tapply(ferm$HPMJ[ferm$Period1 == '3'], INDEX = ferm$Treatment1[ferm$Period1 == '3'], FUN = mean, na.rm = TRUE)
+
+std.error(ferm$HPMJ, na.rm = TRUE)
+
+shapiro.test(ferm$HPMJ)
+leveneTest(HPMJ~Treatment1, data = ferm)
+HPMJ <- aov(HPMJ~ Treatment1*Period1, data = ferm)
+summary(HPMJ)
+pairwise.t.test(ferm$HPMJ, ferm$Treatment1, p.adjust.method = "BH")
+pairwise.t.test(ferm$HPMJ, ferm$Period1, p.adjust.method = "BH")
+pairwise.t.test(ferm$HPMJ, ferm$TP1, p.adjust.method = "BH")
+```
+#Average and SEM of CH4EGEI
+```{r}
+tapply(ferm$CH4EGEI, INDEX = ferm$Treatment1, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$CH4EGEI, INDEX = ferm$Period1, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$CH4EGEI[ferm$Period1 == '1'], INDEX = ferm$Treatment1[ferm$Period1 == '1'], FUN = mean,na.rm = TRUE)
+tapply(ferm$CH4EGEI[ferm$Period1 == '2'], INDEX = ferm$Treatment1[ferm$Period1 == '2'], FUN = mean,na.rm = TRUE)
+tapply(ferm$CH4EGEI[ferm$Period1 == '3'], INDEX = ferm$Treatment1[ferm$Period1 == '3'], FUN = mean, na.rm = TRUE)
+
+std.error(ferm$CH4EGEI, na.rm = TRUE)
+
+shapiro.test(ferm$CH4EGEI)
+leveneTest(CH4EGEI~Treatment1, data = ferm)
+kruskal.test(CH4EGEI~Treatment1, data = ferm )
+kruskal.test(CH4EGEI~Period1, data = ferm )
+kruskal.test(CH4EGEI~TP1, data = ferm )
+pairwise.t.test(ferm$CH4EGEI, ferm$Treatment1, p.adjust.method = "BH")
+pairwise.t.test(ferm$CH4EGEI, ferm$Period1, p.adjust.method = "BH")
+pairwise.t.test(ferm$CH4EGEI, ferm$TP1, p.adjust.method = "BH")
+```
+#Average and SEM of CH4EMEI
+```{r}
+tapply(ferm$CH4EMEI, INDEX = ferm$Treatment1, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$CH4EMEI, INDEX = ferm$Period1, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$CH4EMEI[ferm$Period1 == '1'], INDEX = ferm$Treatment1[ferm$Period1 == '1'], FUN = mean,na.rm = TRUE)
+tapply(ferm$CH4EMEI[ferm$Period1 == '2'], INDEX = ferm$Treatment1[ferm$Period1 == '2'], FUN = mean,na.rm = TRUE)
+tapply(ferm$CH4EMEI[ferm$Period1 == '3'], INDEX = ferm$Treatment1[ferm$Period1 == '3'], FUN = mean, na.rm = TRUE)
+
+std.error(ferm$CH4EMEI, na.rm = TRUE)
+
+shapiro.test(ferm$CH4EMEI)
+leveneTest(CH4EMEI~Treatment1, data = ferm)
+kruskal.test(CH4EMEI~Treatment1, data = ferm )
+kruskal.test(CH4EMEI~Period1, data = ferm )
+kruskal.test(CH4EMEI~TP1, data = ferm )
+pairwise.t.test(ferm$CH4EMEI, ferm$Treatment1, p.adjust.method = "BH")
+pairwise.t.test(ferm$CH4EMEI, ferm$Period1, p.adjust.method = "BH")
+pairwise.t.test(ferm$CH4EMEI, ferm$TP1, p.adjust.method = "BH")
+```
+#Average and SEM pH 
+```{r}
+tapply(ferm$pH, INDEX = ferm$Treatment1, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$pH, INDEX = ferm$Period1, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$pH[ferm$Period1 == '1'], INDEX = ferm$Treatment1[ferm$Period1 == '1'], FUN = mean,na.rm = TRUE)
+tapply(ferm$pH[ferm$Period1 == '2'], INDEX = ferm$Treatment1[ferm$Period1 == '2'], FUN = mean,na.rm = TRUE)
+tapply(ferm$pH[ferm$Period1 == '3'], INDEX = ferm$Treatment1[ferm$Period1 == '3'], FUN = mean, na.rm = TRUE)
+
+std.error(ferm$pH, na.rm = TRUE)
+
+shapiro.test(ferm$pH)
+leveneTest(pH~Treatment1, data = ferm)
+pH <- aov(pH~ Treatment1*Period1, data = ferm)
+summary(pH)
+pairwise.t.test(ferm$pH, ferm$Treatment1, p.adjust.method = "BH")
+pairwise.t.test(ferm$pH, ferm$Period1, p.adjust.method = "BH")
+pairwise.t.test(ferm$pH, ferm$TP1, p.adjust.method = "BH")
+```
+#Average and SEM of Ammonia 
+```{r}
+tapply(ferm$Ammonia, INDEX = ferm$Treatment1, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$Ammonia, INDEX = ferm$Period1, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$Ammonia[ferm$Period1 == '1'], INDEX = ferm$Treatment1[ferm$Period1 == '1'], FUN = mean,na.rm = TRUE)
+tapply(ferm$Ammonia[ferm$Period1 == '2'], INDEX = ferm$Treatment1[ferm$Period1 == '2'], FUN = mean,na.rm = TRUE)
+tapply(ferm$Ammonia[ferm$Period1 == '3'], INDEX = ferm$Treatment1[ferm$Period1 == '3'], FUN = mean, na.rm = TRUE)
+
+std.error(ferm$Ammonia, na.rm = TRUE)
+
+shapiro.test(ferm$Ammonia)
+leveneTest(Ammonia~Treatment1, data = ferm)
+kruskal.test(Ammonia~Treatment1, data = ferm )
+kruskal.test(Ammonia~Period1, data = ferm )
+kruskal.test(Ammonia~TP1, data = ferm )
+pairwise.t.test(ferm$Ammonia, ferm$Treatment1, p.adjust.method = "BH")
+pairwise.t.test(ferm$Ammonia, ferm$Period1, p.adjust.method = "BH")
+pairwise.t.test(ferm$Ammonia, ferm$TP1, p.adjust.method = "BH")
+```
+#Average and SEM of CH4DMI
+```{r}
+tapply(ferm$CH4DMI, INDEX = ferm$Treatment1, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$CH4DMI, INDEX = ferm$Period1, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$CH4DMI[ferm$Period1 == '1'], INDEX = ferm$Treatment1[ferm$Period1 == '1'], FUN = mean,na.rm = TRUE)
+tapply(ferm$CH4DMI[ferm$Period1 == '2'], INDEX = ferm$Treatment1[ferm$Period1 == '2'], FUN = mean,na.rm = TRUE)
+tapply(ferm$CH4DMI[ferm$Period1 == '3'], INDEX = ferm$Treatment1[ferm$Period1 == '3'], FUN = mean, na.rm = TRUE)
+
+std.error(ferm$CH4DMI, na.rm = TRUE)
+
+shapiro.test(ferm$CH4DMI)
+leveneTest(CH4DMI~Treatment1, data = ferm)
+kruskal.test(CH4DMI~Treatment1, data = ferm )
+kruskal.test(CH4DMI~Period1, data = ferm )
+kruskal.test(CH4DMI~TP1, data = ferm )
+pairwise.t.test(ferm$CH4DMI, ferm$Treatment1, p.adjust.method = "BH")
+pairwise.t.test(ferm$CH4DMI, ferm$Period1, p.adjust.method = "BH")
+pairwise.t.test(ferm$CH4DMI, ferm$TP1, p.adjust.method = "BH")
+```
+#Average and SEM of CH4OMI
+```{r}
+tapply(ferm$CH4OM, INDEX = ferm$Treatment1, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$CH4OM, INDEX = ferm$Period1, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$CH4OM[ferm$Period1 == '1'], INDEX = ferm$Treatment1[ferm$Period1 == '1'], FUN = mean,na.rm = TRUE)
+tapply(ferm$CH4OM[ferm$Period1 == '2'], INDEX = ferm$Treatment1[ferm$Period1 == '2'], FUN = mean,na.rm = TRUE)
+tapply(ferm$CH4OM[ferm$Period1 == '3'], INDEX = ferm$Treatment1[ferm$Period1 == '3'], FUN = mean, na.rm = TRUE)
+
+std.error(ferm$CH4OM, na.rm = TRUE)
+
+shapiro.test(ferm$CH4OM)
+leveneTest(CH4OM~Treatment1, data = ferm)
+kruskal.test(CH4OM~Treatment1, data = ferm )
+kruskal.test(CH4OM~Period1, data = ferm )
+kruskal.test(CH4OM~TP1, data = ferm )
+pairwise.t.test(ferm$CH4OM, ferm$Treatment1, p.adjust.method = "BH")
+pairwise.t.test(ferm$CH4OM, ferm$Period1, p.adjust.method = "BH")
+pairwise.t.test(ferm$CH4OM, ferm$TP1, p.adjust.method = "BH")
+```
+#Average and SEM of CH4LW
+```{r}
+tapply(ferm$CH4LW, INDEX = ferm$Treatment1, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$CH4LW, INDEX = ferm$Period1, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$CH4LW[ferm$Period1 == '1'], INDEX = ferm$Treatment1[ferm$Period1 == '1'], FUN = mean,na.rm = TRUE)
+tapply(ferm$CH4LW[ferm$Period1 == '2'], INDEX = ferm$Treatment1[ferm$Period1 == '2'], FUN = mean,na.rm = TRUE)
+tapply(ferm$CH4LW[ferm$Period1 == '3'], INDEX = ferm$Treatment1[ferm$Period1 == '3'], FUN = mean, na.rm = TRUE)
+
+std.error(ferm$CH4LW, na.rm = TRUE)
+
+shapiro.test(ferm$CH4LW)
+leveneTest(CH4LW~Treatment1, data = ferm)
+CH4Lw<- aov(CH4LW~Treatment1*Period1, data = ferm )
+summary(CH4Lw)
+pairwise.t.test(ferm$CH4LW, ferm$Treatment1, p.adjust.method = "BH")
+pairwise.t.test(ferm$CH4LW, ferm$Period1, p.adjust.method = "BH")
+pairwise.t.test(ferm$CH4LW, ferm$TP1, p.adjust.method = "BH")
+```
+#Average and SEM of CH4DLWg
+```{r}
+tapply(ferm$CH4LWG, INDEX = ferm$Treatment1, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$CH4LWG, INDEX = ferm$Period1, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$CH4LWG[ferm$Period1 == '1'], INDEX = ferm$Treatment1[ferm$Period1 == '1'], FUN = mean,na.rm = TRUE)
+tapply(ferm$CH4LWG[ferm$Period1 == '2'], INDEX = ferm$Treatment1[ferm$Period1 == '2'], FUN = mean,na.rm = TRUE)
+tapply(ferm$CH4LWG[ferm$Period1 == '3'], INDEX = ferm$Treatment1[ferm$Period1 == '3'], FUN = mean, na.rm = TRUE)
+
+std.error(ferm$CH4LWG, na.rm = TRUE)
+
+shapiro.test(ferm$CH4LWG)
+leveneTest(CH4LWG~Treatment1, data = ferm)
+kruskal.test(CH4LWG~Treatment1, data = ferm )
+kruskal.test(CH4LWG~Period1, data = ferm )
+kruskal.test(CH4LWG~TP1, data = ferm )
+pairwise.t.test(ferm$CH4LWG, ferm$Treatment1, p.adjust.method = "BH")
+pairwise.t.test(ferm$CH4LWG, ferm$Period1, p.adjust.method = "BH")
+pairwise.t.test(ferm$CH4LWG, ferm$TP1, p.adjust.method = "BH")
+```
+#Average ans SEM of Ethanol
+```{r}
+tapply(ferm$Ethanol, INDEX = ferm$Treatment2, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$Ethanol, INDEX = ferm$Period2, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$Ethanol[ferm$Period2 == '1'], INDEX = ferm$Treatment2[ferm$Period1 == '1'], FUN = mean,na.rm = TRUE)
+tapply(ferm$Ethanol[ferm$Period2 == '2'], INDEX = ferm$Treatment2[ferm$Period1 == '2'], FUN = mean,na.rm = TRUE)
+tapply(ferm$Ethanol[ferm$Period2 == '3'], INDEX = ferm$Treatment2[ferm$Period1 == '3'], FUN = mean, na.rm = TRUE)
+
+std.error(ferm$Ethanol, na.rm = TRUE)
+
+shapiro.test(ferm$Ethanol)
+leveneTest(Ethanol~Treatment2, data = ferm)
+kruskal.test(Ethanol~Treatment2, data = ferm )
+kruskal.test(Ethanol~Period2, data = ferm )
+kruskal.test(Ethanol~TP2, data = ferm )
+pairwise.t.test(ferm$Ethanol, ferm$Treatment2, p.adjust.method = "BH")
+pairwise.t.test(ferm$Ethanol, ferm$Period2, p.adjust.method = "BH")
+pairwise.t.test(ferm$Ethanol, ferm$TP2, p.adjust.method = "BH")
+```
+#Average and SEM of Propanol
+```{r}
+tapply(ferm$Propanol, INDEX = ferm$Treatment2, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$Propanol, INDEX = ferm$Period2, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$Propanol[ferm$Period2 == '1'], INDEX = ferm$Treatment2[ferm$Period1 == '1'], FUN = mean,na.rm = TRUE)
+tapply(ferm$Propanol[ferm$Period2 == '2'], INDEX = ferm$Treatment2[ferm$Period1 == '2'], FUN = mean,na.rm = TRUE)
+tapply(ferm$Propanol[ferm$Period2 == '3'], INDEX = ferm$Treatment2[ferm$Period1 == '3'], FUN = mean, na.rm = TRUE)
+
+std.error(ferm$Propanol, na.rm = TRUE)
+
+shapiro.test(ferm$Propanol)
+leveneTest(Propanol~Treatment2, data = ferm)
+kruskal.test(Propanol~Treatment2, data = ferm )
+kruskal.test(Propanol~Period2, data = ferm )
+kruskal.test(Propanol~TP2, data = ferm )
+pairwise.t.test(ferm$Propanol, ferm$Treatment2, p.adjust.method = "BH")
+pairwise.t.test(ferm$Propanol, ferm$Period2, p.adjust.method = "BH")
+pairwise.t.test(ferm$Propanol, ferm$TP2, p.adjust.method = "BH")
+```
+#Average and SEM of Acetic Acid
+```{r}
+tapply(ferm$Acetic_Acid, INDEX = ferm$Treatment2, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$Acetic_Acid, INDEX = ferm$Period2, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$Acetic_Acid[ferm$Period2 == '1'], INDEX = ferm$Treatment2[ferm$Period1 == '1'], FUN = mean,na.rm = TRUE)
+tapply(ferm$Acetic_Acid[ferm$Period2 == '2'], INDEX = ferm$Treatment2[ferm$Period1 == '2'], FUN = mean,na.rm = TRUE)
+tapply(ferm$Acetic_Acid[ferm$Period2 == '3'], INDEX = ferm$Treatment2[ferm$Period1 == '3'], FUN = mean, na.rm = TRUE)
+
+std.error(ferm$Acetic_Acid, na.rm = TRUE)
+
+shapiro.test(ferm$Acetic_Acid)
+leveneTest(Acetic_Acid~Treatment2, data = ferm)
+AA<- aov(Acetic_Acid~Treatment2*Period2, data = ferm )
+summary(AA)
+pairwise.t.test(ferm$Acetic_Acid, ferm$Treatment2, p.adjust.method = "BH")
+pairwise.t.test(ferm$Acetic_Acid, ferm$Period2, p.adjust.method = "BH")
+pairwise.t.test(ferm$Acetic_Acid, ferm$TP2, p.adjust.method = "BH")
+```
+#Average and SEM of Propanoic_Acid
+```{r}
+tapply(ferm$Propanoic_Acid, INDEX = ferm$Treatment2, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$Propanoic_Acid, INDEX = ferm$Period2, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$Propanoic_Acid[ferm$Period2 == '1'], INDEX = ferm$Treatment2[ferm$Period1 == '1'], FUN = mean,na.rm = TRUE)
+tapply(ferm$Propanoic_Acid[ferm$Period2 == '2'], INDEX = ferm$Treatment2[ferm$Period1 == '2'], FUN = mean,na.rm = TRUE)
+tapply(ferm$Propanoic_Acid[ferm$Period2 == '3'], INDEX = ferm$Treatment2[ferm$Period1 == '3'], FUN = mean, na.rm = TRUE)
+
+std.error(ferm$Propanoic_Acid, na.rm = TRUE)
+
+shapiro.test(ferm$Propanoic_Acid)
+leveneTest(Propanoic_Acid~Treatment2, data = ferm)
+PP<- aov(Propanoic_Acid~Treatment2*Period2, data = ferm )
+summary(PP)
+pairwise.t.test(ferm$Propanoic_Acid, ferm$Treatment2, p.adjust.method = "BH")
+pairwise.t.test(ferm$Propanoic_Acid, ferm$Period2, p.adjust.method = "BH")
+pairwise.t.test(ferm$Propanoic_Acid, ferm$TP2, p.adjust.method = "BH")
+```
+#Average and SEM of i_Butyric_Acid
+```{r}
+tapply(ferm$i_Butyric_Acid, INDEX = ferm$Treatment2, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$i_Butyric_Acid, INDEX = ferm$Period2, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$i_Butyric_Acid[ferm$Period2 == '1'], INDEX = ferm$Treatment2[ferm$Period1 == '1'], FUN = mean,na.rm = TRUE)
+tapply(ferm$i_Butyric_Acid[ferm$Period2 == '2'], INDEX = ferm$Treatment2[ferm$Period1 == '2'], FUN = mean,na.rm = TRUE)
+tapply(ferm$i_Butyric_Acid[ferm$Period2 == '3'], INDEX = ferm$Treatment2[ferm$Period1 == '3'], FUN = mean, na.rm = TRUE)
+
+std.error(ferm$i_Butyric_Acid, na.rm = TRUE)
+
+shapiro.test(ferm$i_Butyric_Acid)
+leveneTest(i_Butyric_Acid~Treatment2, data = ferm)
+kruskal.test(i_Butyric_Acid~Treatment2, data = ferm )
+kruskal.test(i_Butyric_Acid~Period2, data = ferm )
+kruskal.test(i_Butyric_Acid~TP2, data = ferm )
+pairwise.t.test(ferm$i_Butyric_Acid, ferm$Treatment2, p.adjust.method = "BH")
+pairwise.t.test(ferm$i_Butyric_Acid, ferm$Period2, p.adjust.method = "BH")
+pairwise.t.test(ferm$i_Butyric_Acid, ferm$TP2, p.adjust.method = "BH")
+```
+#Average and SEM of n_Butyric_Acid
+```{r}
+tapply(ferm$n_Butyric_Acid, INDEX = ferm$Treatment2, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$n_Butyric_Acid, INDEX = ferm$Period2, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$n_Butyric_Acid[ferm$Period2 == '1'], INDEX = ferm$Treatment2[ferm$Period1 == '1'], FUN = mean,na.rm = TRUE)
+tapply(ferm$n_Butyric_Acid[ferm$Period2 == '2'], INDEX = ferm$Treatment2[ferm$Period1 == '2'], FUN = mean,na.rm = TRUE)
+tapply(ferm$n_Butyric_Acid[ferm$Period2 == '3'], INDEX = ferm$Treatment2[ferm$Period1 == '3'], FUN = mean, na.rm = TRUE)
+
+std.error(ferm$n_Butyric_Acid, na.rm = TRUE)
+
+shapiro.test(ferm$n_Butyric_Acid)
+leveneTest(n_Butyric_Acid~Treatment2, data = ferm)
+nba<- aov(n_Butyric_Acid~Treatment2*Period2, data = ferm )
+summary(nba)
+pairwise.t.test(ferm$n_Butyric_Acid, ferm$Treatment2, p.adjust.method = "BH")
+pairwise.t.test(ferm$n_Butyric_Acid, ferm$Period2, p.adjust.method = "BH")
+pairwise.t.test(ferm$n_Butyric_Acid, ferm$TP2, p.adjust.method = "BH")
+```
+#Average and SEM of i_Valeric_Acid
+```{r}
+tapply(ferm$i_Valeric_Acid, INDEX = ferm$Treatment2, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$i_Valeric_Acid, INDEX = ferm$Period2, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$i_Valeric_Acid[ferm$Period2 == '1'], INDEX = ferm$Treatment2[ferm$Period1 == '1'], FUN = mean,na.rm = TRUE)
+tapply(ferm$i_Valeric_Acid[ferm$Period2 == '2'], INDEX = ferm$Treatment2[ferm$Period1 == '2'], FUN = mean,na.rm = TRUE)
+tapply(ferm$i_Valeric_Acid[ferm$Period2 == '3'], INDEX = ferm$Treatment2[ferm$Period1 == '3'], FUN = mean, na.rm = TRUE)
+
+std.error(ferm$i_Valeric_Acid, na.rm = TRUE)
+
+shapiro.test(ferm$i_Valeric_Acid)
+leveneTest(i_Valeric_Acid~Treatment2, data = ferm)
+kruskal.test(i_Valeric_Acid~Treatment2, data = ferm )
+kruskal.test(i_Valeric_Acid~Period2, data = ferm )
+kruskal.test(i_Valeric_Acid~TP2, data = ferm )
+pairwise.t.test(ferm$i_Valeric_Acid, ferm$Treatment2, p.adjust.method = "BH")
+pairwise.t.test(ferm$i_Valeric_Acid, ferm$Period2, p.adjust.method = "BH")
+pairwise.t.test(ferm$i_Valeric_Acid, ferm$TP2, p.adjust.method = "BH")
+```
+#Average and SEM of n_Valeric_Acid
+```{r}
+tapply(ferm$n_Valeric_Acid, INDEX = ferm$Treatment2, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$n_Valeric_Acid, INDEX = ferm$Period2, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$n_Valeric_Acid[ferm$Period2 == '1'], INDEX = ferm$Treatment2[ferm$Period1 == '1'], FUN = mean,na.rm = TRUE)
+tapply(ferm$n_Valeric_Acid[ferm$Period2 == '2'], INDEX = ferm$Treatment2[ferm$Period1 == '2'], FUN = mean,na.rm = TRUE)
+tapply(ferm$n_Valeric_Acid[ferm$Period2 == '3'], INDEX = ferm$Treatment2[ferm$Period1 == '3'], FUN = mean, na.rm = TRUE)
+
+std.error(ferm$n_Valeric_Acid, na.rm = TRUE)
+
+shapiro.test(ferm$n_Valeric_Acid)
+leveneTest(n_Valeric_Acid~Treatment2, data = ferm)
+kruskal.test(n_Valeric_Acid~Treatment2, data = ferm )
+kruskal.test(n_Valeric_Acid~Period2, data = ferm )
+kruskal.test(n_Valeric_Acid~TP2, data = ferm )
+pairwise.t.test(ferm$n_Valeric_Acid, ferm$Treatment2, p.adjust.method = "BH")
+pairwise.t.test(ferm$n_Valeric_Acid, ferm$Period2, p.adjust.method = "BH")
+pairwise.t.test(ferm$n_Valeric_Acid, ferm$TP2, p.adjust.method = "BH")
+```
+#Total VFA
+```{r}
+tapply(ferm$tVFA, INDEX = ferm$Treatment2, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$tVFA, INDEX = ferm$Period2, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$tVFA[ferm$Period2 == '1'], INDEX = ferm$Treatment2[ferm$Period1 == '1'], FUN = mean,na.rm = TRUE)
+tapply(ferm$tVFA[ferm$Period2 == '2'], INDEX = ferm$Treatment2[ferm$Period1 == '2'], FUN = mean,na.rm = TRUE)
+tapply(ferm$tVFA[ferm$Period2 == '3'], INDEX = ferm$Treatment2[ferm$Period1 == '3'], FUN = mean, na.rm = TRUE)
+
+std.error(ferm$tVFA, na.rm = TRUE)
+
+shapiro.test(ferm$tVFA)
+leveneTest(tVFA~Treatment2, data = ferm)
+tvfa<- aov(tVFA~Treatment2*Period2, data = ferm )
+summary(tvfa)
+kruskal.test(tVFA~Treatment2, data = ferm )
+kruskal.test(tVFA~Period2, data = ferm )
+kruskal.test(tVFA~TP2, data = ferm )
+pairwise.t.test(ferm$tVFA, ferm$Treatment2, p.adjust.method = "BH")
+pairwise.t.test(ferm$tVFA, ferm$Period2, p.adjust.method = "BH")
+pairwise.t.test(ferm$tVFA, ferm$TP2, p.adjust.method = "BH")
+```
+#A:P ratio
+```{r}
+tapply(ferm$AP, INDEX = ferm$Treatment2, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$AP, INDEX = ferm$Period2, FUN = mean, 
+       na.rm = TRUE)
+tapply(ferm$AP[ferm$Period2 == '1'], INDEX = ferm$Treatment2[ferm$Period1 == '1'], FUN = mean,na.rm = TRUE)
+tapply(ferm$AP[ferm$Period2 == '2'], INDEX = ferm$Treatment2[ferm$Period1 == '2'], FUN = mean,na.rm = TRUE)
+tapply(ferm$AP[ferm$Period2 == '3'], INDEX = ferm$Treatment2[ferm$Period1 == '3'], FUN = mean, na.rm = TRUE)
+
+std.error(ferm$AP, na.rm = TRUE)
+
+shapiro.test(ferm$AP)
+leveneTest(AP~Treatment2, data = ferm)
+ap<- aov(AP~Treatment2*Period2, data = ferm )
+summary(ap)
+kruskal.test(AP~Treatment2, data = ferm )
+kruskal.test(AP~Period2, data = ferm )
+kruskal.test(AP~TP2, data = ferm )
+pairwise.t.test(ferm$AP, ferm$Treatment2, p.adjust.method = "BH")
+pairwise.t.test(ferm$AP, ferm$Period2, p.adjust.method = "BH")
+pairwise.t.test(ferm$AP, ferm$TP2, p.adjust.method = "BH")
+```
+#GRAPHS
+#CH4/FDMI relationship
+```{r}
+## Group by Sheep and Period and TP, calculate the mean FDMI, and add the new column
+ferm1 <- ferm %>%
+  group_by(Sheep, Period, TP, Treatment) %>%
+  summarise(mean_FDMI = mean(FDMI, na.rm = TRUE)) %>%
+  ungroup()
+
+
+#How to rename ferm1 
+# Rename columns using dplyr
+ferm1 <- ferm1 %>% 
+  rename(Sheep1 = Sheep, 
+         Treatment1 = Treatment, 
+         Period1 = Period, 
+         TP1 = TP)
+
+#Select average ferm columns
+ferment <- ferm[, 22:53] %>% drop_na()
+
+
+#Left join
+ferment <- ferment %>%
+  left_join(ferm1, by = c("Sheep1", "Treatment1", "Period1", "TP1"))
+
+
+
+ggplot(data = ferment, aes(x=CH4g, y=mean_FDMI, groups =Treatment1))+
+  geom_point(aes(color = Treatment1))+
+  geom_smooth(aes(color = Treatment1), 
+              method = 'lm', se = TRUE, fullrange = FALSE)+
+  labs(title = "Relationship between Methane Production and Cattle weights on 
+different Forage Treatments", x= "FDMI (g)", 
+       y= "Methane Production (g/d) ")+
+  theme_classic()
+```
+#CH4/NDFI
+```{r}
+## Group by Sheep and Period and TP, calculate the mean NDFI, and add the new column
+ferm2 <- ferm %>%
+  group_by(Sheep, Period, TP, Treatment) %>%
+  summarise(mean_NDFI = mean(NDFI, na.rm = TRUE)) %>%
+  ungroup()
+
+
+#How to rename ferm1 
+# Rename columns using dplyr
+ferm2 <- ferm2 %>% 
+  rename(Sheep1 = Sheep, 
+         Treatment1 = Treatment, 
+         Period1 = Period, 
+         TP1 = TP)
+
+#Select average ferm columns
+ferment <- ferm[, 22:53] %>% drop_na()
+
+
+#Left join
+ferment <- ferment %>%
+  left_join(ferm2, by = c("Sheep1", "Treatment1", "Period1", "TP1"))
+
+
+
+ggplot(data = ferment, aes(x=CH4g, y=mean_NDFI, groups =Treatment1))+
+  geom_point(aes(color = Treatment1))+
+  geom_smooth(aes(color = Treatment1), 
+              method = 'gam', se = TRUE, fullrange = FALSE)+
+  labs(title = "Relationship between Methane Production and Cattle weights on 
+different Forage Treatments", x= "FDMI (g)", 
+       y= "Methane Production (g/d) ")+
+  theme_classic()
+```
+#NI and NH3
+```{r}
+## Group by Sheep and Period and TP, calculate the mean NI, and add the new column
+ferm1 <- ferm %>%
+  group_by(Sheep, Period, TP, Treatment) %>%
+  summarise(mean_NI = mean(NI, na.rm = TRUE)) %>%
+  ungroup()
+
+
+#How to rename ferm1 
+# Rename columns using dplyr
+ferm1 <- ferm1 %>% 
+  rename(Sheep1 = Sheep, 
+         Treatment1 = Treatment, 
+         Period1 = Period, 
+         TP1 = TP)
+
+#Select average ferm columns
+ferment <- ferm[, 22:53] %>% drop_na()
+
+
+#Left join
+ferment <- ferment %>%
+  left_join(ferm1, by = c("Sheep1", "Treatment1", "Period1", "TP1"))
+
+
+
+ggplot(data = ferment, aes(x=Ammonia, y=mean_NI, groups =Treatment1))+
+  geom_point(aes(color = Treatment1))+
+  geom_smooth(aes(color = Treatment1), 
+              method = 'auto', se = TRUE, fullrange = FALSE)+
+  labs(title = "Relationship between Methane Production and Cattle weights on 
+different Forage Treatments", x= "FDMI (g)", 
+       y= "Methane Production (g/d) ")+
+  theme_classic()
+```
+#Average plots FDMI vs CH4
+```{r}
+ferm1 <- ferm %>%
+  group_by(Sheep, Period, TP, Treatment) %>%
+  summarise(mean_FDMI = mean(FDMI, na.rm = TRUE)) %>%
+  ungroup()
+
+
+#How to rename ferm1 
+# Rename columns using dplyr
+ferm1 <- ferm1 %>% 
+  rename(Sheep1 = Sheep, 
+         Treatment1 = Treatment, 
+         Period1 = Period, 
+         TP1 = TP)
+
+#Select average ferm columns
+ferment <- ferm[, 22:53] %>% drop_na()
+
+
+#Left join
+ferment <- ferment %>%
+  left_join(ferm1, by = c("Sheep1", "Treatment1", "Period1", "TP1"))
+
+#rename
+ferment <- ferment %>%
+  rename(FDMI = mean_FDMI)
+
+# Step 1: Summarize the data, including mean and standard error for FDMI and CH4
+summary_df <- ferment %>%
+  group_by(Treatment1) %>%
+  summarise(
+    mean_FDMI = mean(FDMI, na.rm = TRUE),
+    mean_CH4 = mean(CH4g, na.rm = TRUE),
+    sd_FDMI = sd(FDMI, na.rm = TRUE),
+    sd_CH4 = sd(CH4g, na.rm = TRUE),
+    n = n()
+  ) %>%
+  mutate(
+    se_FDMI = sd_FDMI / sqrt(n),  # Standard error of ammonia
+    se_CH4 = sd_CH4 / sqrt(n)  # Standard error of nitrogen intake
+  )
+
+#Levels
+summary_df$Treatment1<-  factor(summary_df$Treatment1, levels = c("SIL", "BG", "TN"))
+
+# Step 2: Plot the data with error bars and lines
+a<-ggplot(summary_df, aes(x = mean_CH4, y = mean_FDMI, color = Treatment1)) +
+  geom_point(size = 3) +                          # Add points for each treatment
+  geom_line(aes(group = 1), linetype = "dashed", color = "black") +             # Connect points for each treatment
+    geom_errorbarh(aes(xmin = mean_CH4 - se_CH4, 
+                     xmax = mean_CH4 + se_CH4), 
+                 height = 0.8) + 
+  geom_errorbar(aes(ymin = mean_FDMI - se_FDMI, ymax = mean_FDMI + se_FDMI), 
+                width = 0.2) +                    # Add vertical error bars (for FDMI)
+                 # Add horizontal error bars (for nitrogen intake)
+  labs(x = "Methane (g/d)", y = "FDMI (g/d)", color = "Treatment", tag = "(a)") +  # Add labels and legend
+  scale_color_manual(values = c("SIL" = "blue", "BG" = "darkgreen", "TN" = "grey")) +
+  theme_classic() + # Use a clean theme
+  geom_rect(aes(xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf), 
+            fill = NA, color = "black", size = 1.5)
+ggsave("FDMi_vs_CH4.png", plot = a, width = 8.27, height = 3.9, dpi = 600)
+
+```
+# NDFI vs CH4
+```{r}
+ferm1 <- ferm %>%
+  group_by(Sheep, Period, TP, Treatment) %>%
+  summarise(mean_NDFI = mean(NDFI, na.rm = TRUE)) %>%
+  ungroup()
+
+
+#How to rename ferm1 
+# Rename columns using dplyr
+ferm1 <- ferm1 %>% 
+  rename(Sheep1 = Sheep, 
+         Treatment1 = Treatment, 
+         Period1 = Period, 
+         TP1 = TP)
+
+#Select average ferm columns
+ferment <- ferm[, 22:53] %>% drop_na()
+
+
+#Left join
+ferment <- ferment %>%
+  left_join(ferm1, by = c("Sheep1", "Treatment1", "Period1", "TP1"))
+
+#rename
+ferment <- ferment %>%
+  rename(NDFI = mean_NDFI)
+
+# Step 1: Summarize the data, including mean and standard error for NDFI and CH4
+summary_df <- ferment %>%
+  group_by(Treatment1) %>%
+  summarise(
+    mean_NDFI = mean(NDFI, na.rm = TRUE),
+    mean_CH4 = mean(CH4g, na.rm = TRUE),
+    sd_NDFI = sd(NDFI, na.rm = TRUE),
+    sd_CH4 = sd(CH4g, na.rm = TRUE),
+    n = n()
+  ) %>%
+  mutate(
+    se_NDFI = sd_NDFI / sqrt(n),  # Standard error of ammonia
+    se_CH4 = sd_CH4 / sqrt(n)  # Standard error of nitrogen intake
+  )
+
+#Levels
+summary_df$Treatment1<-  factor(summary_df$Treatment1, levels = c("SIL", "BG", "TN"))
+
+# Step 2: Plot the data with error bars and lines
+b<-ggplot(summary_df, aes(x = mean_CH4, y = mean_NDFI, color = Treatment1)) +
+  geom_point(size = 3) +                          # Add points for each treatment
+  geom_line(aes(group = 1), linetype = "dashed", color = "black") +             # Connect points for each treatment
+    geom_errorbarh(aes(xmin = mean_CH4 - se_CH4, 
+                     xmax = mean_CH4 + se_CH4), 
+                 height = 0.8) + 
+  geom_errorbar(aes(ymin = mean_NDFI - se_NDFI, ymax = mean_NDFI + se_NDFI), 
+                width = 0.2) +                    # Add vertical error bars (for NDFI)
+                 # Add horizontal error bars (for nitrogen intake)
+  labs(x = "Methane (g/d)", y = "NDFI (g/d)", color = "Treatment", tag = "(b)") +  # Add labels and legend
+  scale_color_manual(values = c("SIL" = "blue", "BG" = "darkgreen", "TN" = "grey")) +
+  theme_classic() + # Use a clean theme
+geom_rect(aes(xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf), 
+            fill = NA, color = "black", size = 1.5)
+ggsave("NDFI_vs_CH4.png", plot = b, width = 8.27, height = 3.9, dpi = 600)
+```
+#NI vs Ammonia
+```{r}
+ferm1 <- ferm %>%
+  group_by(Sheep, Period, TP, Treatment) %>%
+  summarise(mean_NI = mean(NI, na.rm = TRUE)) %>%
+  ungroup()
+
+
+#How to rename ferm1 
+# Rename columns using dplyr
+ferm1 <- ferm1 %>% 
+  rename(Sheep1 = Sheep, 
+         Treatment1 = Treatment, 
+         Period1 = Period, 
+         TP1 = TP)
+
+#Select average ferm columns
+ferment <- ferm[, 22:53] %>% drop_na()
+
+
+#Left join
+ferment <- ferment %>%
+  left_join(ferm1, by = c("Sheep1", "Treatment1", "Period1", "TP1"))
+
+#rename
+ferment <- ferment %>%
+  rename(NI = mean_NI)
+
+# Step 1: Summarize the data, including mean and standard error for NI and Ammonia
+summary_df <- ferment %>%
+  group_by(Treatment1) %>%
+  summarise(
+    mean_NI = mean(NI, na.rm = TRUE),
+    mean_Ammonia = mean(Ammonia, na.rm = TRUE),
+    sd_NI = sd(NI, na.rm = TRUE),
+    sd_Ammonia = sd(Ammonia, na.rm = TRUE),
+    n = n()
+  ) %>%
+  mutate(
+    se_NI = sd_NI / sqrt(n),  # Standard error of ammonia
+    se_Ammonia = sd_Ammonia / sqrt(n)  # Standard error of nitrogen intake
+  )
+
+#Levels
+summary_df$Treatment1<-  factor(summary_df$Treatment1, levels = c("SIL", "BG", "TN"))
+
+# Step 2: Plot the data with error bars and lines
+c<-ggplot(summary_df, aes(x = mean_Ammonia, y = mean_NI, color = Treatment1)) +
+  geom_point(size = 3) +                          # Add points for each treatment
+  geom_line(aes(group = 1), linetype = "dashed", color = "black") +             # Connect points for each treatment
+    geom_errorbarh(aes(xmin = mean_Ammonia - se_Ammonia, 
+                     xmax = mean_Ammonia + se_Ammonia), 
+                 height = 0.8) + 
+  geom_errorbar(aes(ymin = mean_NI - se_NI, ymax = mean_NI + se_NI), 
+                width = 0.2) +                    # Add vertical error bars (for NI)
+                 # Add horizontal error bars (for nitrogen intake)
+  labs(x = "Ammonia (mg/L NH3)", y = "NI (g/d)", color = "Treatment", tag = "(c)") +  # Add labels and legend
+  scale_color_manual(values = c("SIL" = "blue", "BG" = "darkgreen", "TN" = "grey")) +
+  theme_classic() +  # Use a clean theme
+  geom_rect(aes(xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf), 
+            fill = NA, color = "black", size = 1.5)
+ggsave("NI_vs_Ammonia.png", plot = c, width = 8.27, height = 3.9, dpi = 600)
+```
+#Arrange x,y plots and save
+```{r}
+# Create an empty plot
+empty_plot <- ggplot() + 
+  theme_void()  +
+  labs(tag = "(d)")
+
+combined_plot<- (a + b) / (c + c)+
+  plot_layout(guides = "collect")+
+  theme(legend.position = "right")
+jpeg("combined_relationship_plots.jpeg", width = 8.27, height = 4.5, units = "in", res = 600)
+print(combined_plot)
+dev.off()
+```
+#VFA bar plots 
+```{r}
+#Select average ferm columns
+vfa <- ferm[, 54:67] %>% drop_na()
+
+# Group by Treatment and calculate mean and standard error for Acetic acid
+summary_df <- vfa %>%
+  group_by(Treatment2) %>%
+  summarise(
+    mean_acetic_acid = mean(Acetic_Acid, na.rm = TRUE),  # Calculate mean
+    sd_acetic_acid = sd(Acetic_Acid, na.rm = TRUE),      # Calculate standard deviation
+    n = n()                        # Count number of observations
+  ) %>%
+  mutate(
+    se_acetic_acid = sd_acetic_acid / sqrt(n)  # Calculate standard error
+  )
+
+#Levels
+summary_df$Treatment2<-  factor(summary_df$Treatment2, levels = c("SIL", "BG", "TN"))
+
+
+#Barplot
+aa<-ggplot(summary_df, aes(x = Treatment2, y = mean_acetic_acid, fill = Treatment2)) +
+  geom_bar(stat = "identity", color = "black", position = position_dodge(), width = 0.7) +  # Create bars
+  geom_errorbar(aes(ymin = mean_acetic_acid - se_acetic_acid, 
+                    ymax = mean_acetic_acid + se_acetic_acid),
+                width = 0.2, position = position_dodge(0.7)) +  # Add error bars
+  labs(x = "", y = "Acetic Acid (mmol/L)", fill = "Treatment") +  # Labels
+  scale_fill_manual(values = c("SIL" = "blue", "BG" = "darkgreen", "TN" = "grey")) +
+  labs(tag = "(a)")+
+  theme_classic() +  # Clean theme
+  geom_rect(aes(xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf), 
+            fill = NA, color = "black", size = 1.5)
+
+aa
+```
+# Propionic acid
+```{r}
+#Select average ferm columns
+vfa <- ferm[, 54:67] %>% drop_na()
+
+# Group by Treatment and calculate mean and standard error for Acetic acid
+summary_df <- vfa %>%
+  group_by(Treatment2) %>%
+  summarise(
+    mean_Propanoic_Acid = mean(Propanoic_Acid, na.rm = TRUE),  # Calculate mean
+    sd_Propanoic_Acid = sd(Propanoic_Acid, na.rm = TRUE),      # Calculate standard deviation
+    n = n()                        # Count number of observations
+  ) %>%
+  mutate(
+    se_Propanoic_Acid = sd_Propanoic_Acid / sqrt(n)  # Calculate standard error
+  )
+
+#Levels
+summary_df$Treatment2<-  factor(summary_df$Treatment2, levels = c("SIL", "BG", "TN"))
+
+
+#Barplot
+pa<-ggplot(summary_df, aes(x = Treatment2, y = mean_Propanoic_Acid, fill = Treatment2)) +
+  geom_bar(stat = "identity", color = "black", position = position_dodge(), width = 0.7) +  # Create bars
+  geom_errorbar(aes(ymin = mean_Propanoic_Acid - se_Propanoic_Acid, 
+                    ymax = mean_Propanoic_Acid + se_Propanoic_Acid),
+                width = 0.2, position = position_dodge(0.7)) +  # Add error bars
+  labs(x = "", y = "Propionic Acid (mmol/L)", fill = "Treatment") +  # Labels
+  scale_fill_manual(values = c("SIL" = "blue", "BG" = "darkgreen", "TN" = "grey")) +
+  labs(tag = "(b)")+
+  theme_classic()+
+    geom_rect(aes(xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf), 
+            fill = NA, color = "black", size = 1.5)
+pa
+  
+```
+#Acetate : Propionic ratio
+```{r}
+#Select average ferm columns
+vfa <- ferm[, 54:67] %>% drop_na()
+
+# Group by Treatment and calculate mean and standard error for Acetic acid
+summary_df <- vfa %>%
+  group_by(Treatment2) %>%
+  summarise(
+    mean_AP = mean(AP, na.rm = TRUE),  # Calculate mean
+    sd_AP = sd(AP, na.rm = TRUE),      # Calculate standard deviation
+    n = n()                        # Count number of observations
+  ) %>%
+  mutate(
+    se_AP = sd_AP / sqrt(n)  # Calculate standard error
+  )
+
+#Levels
+summary_df$Treatment2<-  factor(summary_df$Treatment2, levels = c("SIL", "BG", "TN"))
+
+
+#Barplot
+ap<-ggplot(summary_df, aes(x = Treatment2, y = mean_AP, fill = Treatment2)) +
+  geom_bar(stat = "identity", color = "black", position = position_dodge(), width = 0.7) +  # Create bars
+  geom_errorbar(aes(ymin = mean_AP - se_AP, 
+                    ymax = mean_AP + se_AP),
+                width = 0.2, position = position_dodge(0.7)) +  # Add error bars
+  labs(x = "", y = "Acetic : Propionic (mmol/L)", fill = "Treatment") +  # Labels
+  scale_fill_manual(values = c("SIL" = "blue", "BG" = "darkgreen", "TN" = "grey")) +
+  labs(tag = "(c)")+
+  theme_classic() +  # Clean theme
+  geom_rect(aes(xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf), 
+            fill = NA, color = "black", size = 1.5)
+ap
+```
+#Total VFA
+```{r}
+#Select average ferm columns
+vfa <- ferm[, 54:67] %>% drop_na()
+
+# Group by Treatment and calculate mean and standard error for Acetic acid
+summary_df <- vfa %>%
+  group_by(Treatment2) %>%
+  summarise(
+    mean_tVFA = mean(tVFA, na.rm = TRUE),  # Calculate mean
+    sd_tVFA = sd(tVFA, na.rm = TRUE),      # Calculate standard deviation
+    n = n()                        # Count number of observations
+  ) %>%
+  mutate(
+    se_tVFA = sd_tVFA / sqrt(n)  # Calculate standard error
+  )
+
+#Levels
+summary_df$Treatment2<-  factor(summary_df$Treatment2, levels = c("SIL", "BG", "TN"))
+
+
+#Barplot
+t<-ggplot(summary_df, aes(x = Treatment2, y = mean_tVFA, fill = Treatment2)) +
+  geom_bar(stat = "identity", color = "black", position = position_dodge(), width = 0.7) +  # Create bars
+  geom_errorbar(aes(ymin = mean_tVFA - se_tVFA, 
+                    ymax = mean_tVFA + se_tVFA),
+                width = 0.2, position = position_dodge(0.7)) +  # Add error bars
+  labs(x = "", y = "Total VFA (mmol/L)", fill = "Treatment") +  # Labels
+  scale_fill_manual(values = c("SIL" = "blue", "BG" = "darkgreen", "TN" = "grey")) +
+  labs(tag = "(d)")+
+  theme_classic() +  # Clean theme
+  geom_rect(aes(xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf), 
+            fill = NA, color = "black", size = 1.5)
+t
+  
+```
+#Arrange VFA plots
+```{r}
+combined_plot<- (aa + pa) / (ap + t)+
+  plot_layout(guides = "collect")+
+  theme(legend.position = "right")
+jpeg("combined_vfa_plots.jpeg", width = 8.27, height = 4.5, units = "in", res = 600)
+print(combined_plot)
+dev.off()
+```
+
